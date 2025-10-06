@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
-TARGET = server
+TARGET = server.out
 SRC = main.c
 
 .PHONY: all clean

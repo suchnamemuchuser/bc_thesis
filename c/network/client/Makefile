@@ -1,6 +1,6 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
-TARGET = client
+TARGET = client.out
 SRC = main.c
 
 .PHONY: all clean
