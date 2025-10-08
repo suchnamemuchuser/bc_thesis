@@ -1,21 +1,17 @@
 CC = gcc
-CFLAGS = -Wall
-
-TARGET = writer-reader
-
-SRCS = main.c
-
-OBJS = $(SRCS:.c=.o)
-
-HEADERS = 
-
+CFLAGS = -Wall -Wextra
 LIBS = -lpthread -lrt
 
+TARGET = writer-reader.out
+SRCS = main.c
+OBJS = $(SRCS:.c=.o)
+HEADERS =
+
 $(TARGET): $(OBJS)
-	$(CC) -o $(TARGET).out $(OBJS) $(LIBS)
+	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)
 
 %.o: %.c $(HEADERS)
-	$(CC) $(CFLAGS) -c $<
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	rm -f $(TARGET) $(OBJS)
