@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "circularbuffer.h": "c",
+        "stdio.h": "c"
+    }
+}
