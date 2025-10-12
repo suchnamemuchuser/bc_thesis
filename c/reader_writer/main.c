@@ -67,9 +67,11 @@ void writerBehaviour()
         pulsarValues[i] = rand();
     }
 
+    sem_wait(&turnstile);
     sem_wait(&readLightSwitch);
     // Critical section here
     sem_post(&readLightSwitch);
+    sem_post(&turnstile);
 }
 
 void readerBehaviour()
