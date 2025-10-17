@@ -1,10 +1,22 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+
 #include "CircularBuffer.h"
 
-int main()
+int main(int argc, char* argv[])
 {
+    cb_config config;
+
+    if (parseArguments(argc, argv, &config) > 0)
+    {
+        return 1;
+    }
+
+    printf("Filename: %s\n", config.filename);
+
+    return 0;
+
     cb_CircularBuffer buffer;
 
     int retVal = circularBufferInit(&buffer, 8);
@@ -15,6 +27,14 @@ int main()
         
         return 1;
     }
+
+
+
+
+    
+
+
+
 
     printf("Data ptr: %p\n", (void*) buffer.data_ptr);
     printf("Data head: %p\n", (void*) buffer.data_head);
