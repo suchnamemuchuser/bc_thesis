@@ -1,11 +1,11 @@
 CC = gcc
 CFLAGS = -Wall -Wextra
-LIBS = -lpthread -lrt
+LIBS = -lpthread
 
 TARGET = writer-reader.out
-SRCS = main.c
+SRCS = main.c CircularBuffer.c
 OBJS = $(SRCS:.c=.o)
-HEADERS =
+HEADERS = CircularBuffer.h
 
 $(TARGET): $(OBJS)
 	$(CC) $(CFLAGS) -o $@ $(OBJS) $(LIBS)

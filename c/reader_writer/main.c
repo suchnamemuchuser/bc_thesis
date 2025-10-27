@@ -1,120 +1,117 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <semaphore.h>
-#include <unistd.h>
+//#include <stdlib.h>
+#include <pthread.h>
+#include<unistd.h>
 
-#define CYCLICAL_BUFFER_SIZE 10000
+#include "CircularBuffer.h"
 
-sem_t readLightSwitch;
-sem_t turnstile;
-sem_t readerCountMutex;
+pthread_mutex_t buffer_lock;
 
-u_int32_t readerCount;
+pthread_cond_t data_available;
 
-int PulsarValuesCBuffer[CYCLICAL_BUFFER_SIZE];
+pthread_cond_t space_available;
 
-void writerBehaviour();
+circularBuffer buffer;
 
-void readerBehaviour();
+void* writerBehaviour(void* arg);
 
-void readerWaitLightswitch();
-
-void readerPostLightswitch();
+void* readerBehaviour(void* arg);
 
 int main(){
-    // locked when one writer or atleast one reader present in critical section
-    sem_init(&readLightSwitch, 0, 1);
+    // init mutex, conds
+    pthread_mutex_init(&buffer_lock, NULL);
+    pthread_cond_init(&data_available, NULL);
+    pthread_cond_init(&space_available, NULL);
 
-    // locked when one writer present  in critical section
-    sem_init(&turnstile, 0, 1);
+    circularBufferInit(&buffer, 2000);
 
-    // to access reader count
-    sem_init(&readerCountMutex, 0, 1);
+    pthread_t writer_thread;
+    pthread_t reader_thread;
 
-    /*
-    TODO: behaviour
+    printf("Starting threads...\n");
 
-    TODO: create writer and reader
-    */
-
-    pid_t processId = fork();
-
-    // am child process
-    if (processId == 0)
+    if (pthread_create(&writer_thread, NULL, writerBehaviour, NULL)) 
     {
-        printf("I am writer process\n");
-        // create writer
-        // make sure writer ends, does not continue past here
-        exit(0);
+        fprintf(stderr, "Error creating writer thread\n");
+        return 1;
+    }
+    
+    if (pthread_create(&reader_thread, NULL, readerBehaviour, NULL))
+    {
+        fprintf(stderr, "Error creating reader thread\n");
+        return 1;
     }
 
-    // TODO: add writer process id to list for later kill?
-    
-    printf("I am parent process\n");
+    pthread_join(writer_thread, NULL);
 
-    sem_destroy(&readLightSwitch);
-    sem_destroy(&turnstile);
-    sem_destroy(&readerCountMutex);
+    printf("Writer finished. Cleaning up.\n");
+
+    pthread_cancel(reader_thread);
+
+    // destroy mutex, conds
+    pthread_mutex_destroy(&buffer_lock);
+    pthread_cond_destroy(&data_available);
+    pthread_cond_destroy(&space_available);
+
+    circularBufferFree(&buffer);
 
     return 0;
 }
 
-void writerBehaviour()
+void* writerBehaviour(void* arg) // will be in a while loop?
 {
-    int pulsarValues[1000];
+    time_t start = time(NULL);
+    time_t end = start + 60;
 
-    for (int i = 0 ; i < 1000 ; i++){
-        pulsarValues[i] = rand();
-    }
-
-    sem_wait(&turnstile);
-    sem_wait(&readLightSwitch);
-    // Critical section here
-    sem_post(&readLightSwitch);
-    sem_post(&turnstile);
-}
-
-void readerBehaviour()
-{
-    // check writer is not in critical section
-    sem_wait(&turnstile);
-    sem_post(&turnstile);
-
-    readerWaitLightswitch();
-    // critical section
-    readerPostLightswitch();
-}
-
-void readerWaitLightswitch()
-{
-    // lock mutex
-    sem_wait(&readerCountMutex);
-
-    readerCount++;
-
-    // check if first reader in
-    if (readerCount == 1)
+    while (end > time(NULL))
     {
-        sem_wait(&readLightSwitch);
-    }
+        sleep(1); // writing 30 bytes every second
 
-    // unlock mutex
-    sem_post(&readerCountMutex);
+        pthread_mutex_lock(&buffer_lock);
+
+        int ret = circularBufferWrite(&buffer, 30);
+
+        if (ret < 0)
+        {
+            printf("Writer has no space to write!\n");
+            return NULL;
+        }
+
+        pthread_cond_broadcast(&data_available);
+
+        pthread_mutex_unlock(&buffer_lock);
+
+        printf("Wrote %d of data.\n", 30);
+    }
 }
 
-void readerPostLightswitch()
+void* readerBehaviour(void* arg) // will be in a while loop?
 {
-    // lock mutex
-    sem_wait(&readerCountMutex);
 
-    readerCount--;
+    size_t data_to_read = 100;
+    int my_reader_id = 0;
 
-    // check if last reader out
-    if (readerCount == 0)
+    pthread_mutex_lock(&buffer_lock);
+    if (buffer.readerTails[my_reader_id] == NULL)
     {
-        sem_post(&readLightSwitch);
+        buffer.readerTails[my_reader_id] = buffer.data_ptr; 
+        buffer.reader_cnt = 1;
     }
+    pthread_mutex_unlock(&buffer_lock);
 
-    // unlock mutex
-    sem_post(&readerCountMutex);
+    while (1)
+    {
+        pthread_mutex_lock(&buffer_lock);
+
+        while (circularBufferAvailableData(&buffer, my_reader_id) < (int) data_to_read)
+        {
+            pthread_cond_wait(&data_available, &buffer_lock);
+        }
+
+        int readCnt = circularBufferRead(&buffer, my_reader_id, data_to_read);
+
+        pthread_mutex_unlock(&buffer_lock);
+
+        printf("Read %d of data.\n", readCnt);
+    }
 }
