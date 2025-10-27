@@ -14,6 +14,10 @@ typedef struct {
     char address[256];
     // port
     int port;
+
+
+    // Writer reads zeroes, from file or from network
+    // reader writes into file or network
 } argParser;
 
 int parseArguments(int argc, char* argv[], argParser* args)

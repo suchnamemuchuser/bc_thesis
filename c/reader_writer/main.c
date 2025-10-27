@@ -69,6 +69,8 @@ void* writerBehaviour(void* arg) // will be in a while loop?
 
         pthread_mutex_lock(&buffer_lock);
 
+        // if no space, print error and discard data
+
         int ret = circularBufferWrite(&buffer, 30);
 
         if (ret < 0)
@@ -111,6 +113,14 @@ void* readerBehaviour(void* arg) // will be in a while loop?
         int readCnt = circularBufferRead(&buffer, my_reader_id, data_to_read);
 
         pthread_mutex_unlock(&buffer_lock);
+
+        // This is where data is processed
+
+        // mutes lock again
+
+        // update tail (maybe atomic)
+
+        // mutex unlock
 
         printf("Read %d of data.\n", readCnt);
     }
