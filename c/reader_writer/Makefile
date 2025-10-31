@@ -3,7 +3,7 @@ CFLAGS = -Wall -Wextra
 LIBS = -lpthread
 
 TARGET = writer-reader.out
-SRCS = main.c CircularBuffer.c
+SRCS = main.c CircularBuffer.c ArgParser.c
 OBJS = $(SRCS:.c=.o)
 HEADERS = CircularBuffer.h
 

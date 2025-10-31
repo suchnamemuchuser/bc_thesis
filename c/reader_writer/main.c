@@ -4,6 +4,7 @@
 #include<unistd.h>
 
 #include "CircularBuffer.h"
+#include "ArgParser.h"
 
 pthread_mutex_t buffer_lock;
 
@@ -17,7 +18,12 @@ void* writerBehaviour(void* arg);
 
 void* readerBehaviour(void* arg);
 
-int main(){
+int main(int argc, char* argv[]){
+
+    argParser arguments = parseArguments(argc, argv);
+
+    return 0;
+
     // init mutex, conds
     pthread_mutex_init(&buffer_lock, NULL);
     pthread_cond_init(&data_available, NULL);
@@ -85,6 +91,8 @@ void* writerBehaviour(void* arg) // will be in a while loop?
 
         printf("Wrote %d of data.\n", 30);
     }
+
+    return NULL;
 }
 
 void* readerBehaviour(void* arg) // will be in a while loop?
@@ -124,4 +132,6 @@ void* readerBehaviour(void* arg) // will be in a while loop?
 
         printf("Read %d of data.\n", readCnt);
     }
+
+    return NULL;
 }
