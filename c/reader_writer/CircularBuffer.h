@@ -1,22 +1,32 @@
 #include <stdlib.h>
+#include <stdint.h>
+#include <stdatomic.h>
+#include <stdbool.h>
 
 #define READER_MAX_CAP 128
 #define BUFFER_DEF_SIZ 512000000 // 512 MB
 
+
+
 typedef struct
 {
-    char* data_ptr; // pointer to data
+    uint8_t* data_ptr; // pointer to data
 
     size_t data_len; // length of data in bytes
     
-    char* data_head; // The position within the buffer, where new data is to be written
+    //uint8_t* data_head; // The position within the buffer, where new data is to be written
 
-    char* data_end; // pointer to the end of data - writing here would cause memory error
+    size_t data_head_offset;
+
+    //uint8_t* data_end; // pointer to the end of data - writing here would cause memory error
     
-    char* readerTails[READER_MAX_CAP]; // For each reader, either NULL or pointer to where reader will read next
+    //uint8_t* readerTails[READER_MAX_CAP]; // For each reader, either NULL or pointer to where reader will read next
+
+    size_t readerOffset[READER_MAX_CAP]; // For each reader, tail position relative to start of buffer - buffer length for unused fields
 
     int reader_cnt; // number of registered readers
 
+    bool writerFinished;
 
 } circularBuffer;
 
@@ -26,6 +36,8 @@ void circularBufferFree(circularBuffer* buffer);
 
 int circularBufferWrite(circularBuffer* buffer, size_t writeLen);
 
-int circularBufferRead(circularBuffer* buffer, int readerId, size_t readLen);
+int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readLen);
 
 int circularBufferAvailableData(circularBuffer* buffer, int readerId);
+
+int circularBufferReadData(circularBuffer* buffer, int readerId, size_t readLen, uint8_t* readerBuffer);

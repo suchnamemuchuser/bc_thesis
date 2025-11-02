@@ -10,7 +10,7 @@ typedef enum {
 typedef struct {
 
     // buffer info
-    int bufferSize; // -b || --buffer-size
+    int bufferSize; // -b || --buffer-size       ?? in (k/m)bytes?
 
 
 
