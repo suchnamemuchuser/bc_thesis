@@ -4,7 +4,7 @@
 
 int circularBufferInit(circularBuffer* buffer, int bufferSize)
 {
-    buffer->data_ptr = (char*) malloc((size_t) bufferSize);
+    buffer->data_ptr = malloc((size_t) bufferSize);
 
     if(buffer->data_ptr == NULL) // check for malloc fail
     {
@@ -19,7 +19,7 @@ int circularBufferInit(circularBuffer* buffer, int bufferSize)
 
     //buffer->data_end = buffer->data_ptr + buffer->data_len; // set end
 
-    memset(buffer->data_ptr, 0, buffer->data_len); // init buffer with 0s
+    memset(buffer->data_ptr, 48, buffer->data_len); // init buffer with 0s
 
     buffer->reader_cnt = 0;
 
@@ -126,4 +126,6 @@ int circularBufferReadData(circularBuffer* buffer, int readerId, size_t readLen,
 
     memcpy(readerBuffer, (buffer->data_ptr + buffer->readerOffset[readerId]), spaceToEnd);
     memcpy(readerBuffer + spaceToEnd, buffer->data_ptr, readLen - spaceToEnd);
+
+    return readLen;
 }

@@ -16,9 +16,9 @@ circularBuffer buffer;
 
 argParser arguments;
 
-FILE *fptr;
-
 void* writerBehaviour(void* arg);
+
+void* writerWriteFromFile(void* arg);
 
 void* readerBehaviour(void* arg);
 
@@ -36,14 +36,17 @@ int main(int argc, char* argv[]){
     circularBufferInit(&buffer, 2000);
 
     printf("Buffer init:\n");
-    printf("\n");
-    printf("\n");
-    printf("\n");
+    printf("Pointer: %p\n", buffer.data_ptr);
+    printf("Length:  %ld\n", buffer.data_len);
+    printf("Offset:  %ld\n", buffer.data_head_offset);
 
-    fptr = fopen("filename.txt", "w");
+    FILE *fptr1 = fopen("file1", "w");
+
+    FILE *fptr2 = fopen("file2", "w");
 
     pthread_t writer_thread;
-    pthread_t reader_thread;
+    pthread_t reader_thread1;
+    pthread_t reader_thread2;
 
     printf("Starting threads...\n");
 
@@ -53,7 +56,13 @@ int main(int argc, char* argv[]){
         return 1;
     }
     
-    if (pthread_create(&reader_thread, NULL, readerBehaviour, NULL))
+    if (pthread_create(&reader_thread1, NULL, readerWriteToFile, (void*) fptr1))
+    {
+        fprintf(stderr, "Error creating reader thread\n");
+        return 1;
+    }
+
+    if (pthread_create(&reader_thread2, NULL, readerWriteToFile, (void*) fptr2))
     {
         fprintf(stderr, "Error creating reader thread\n");
         return 1;
@@ -63,7 +72,13 @@ int main(int argc, char* argv[]){
 
     printf("Writer finished. Cleaning up.\n");
 
-    pthread_cancel(reader_thread);
+    pthread_join(reader_thread1, NULL);
+
+    pthread_join(reader_thread2, NULL);
+
+    fclose(fptr1);
+
+    fclose(fptr2);
 
     // destroy mutex, conds
     pthread_mutex_destroy(&buffer_lock);
@@ -72,15 +87,13 @@ int main(int argc, char* argv[]){
 
     circularBufferFree(&buffer);
 
-    fclose(fptr);
-
     return 0;
 }
 
 void* writerBehaviour(void* arg) // will be in a while loop?
 {
     time_t start = time(NULL);
-    time_t end = start + 60;
+    time_t end = start + 10;
 
     while (end > time(NULL))
     {
@@ -116,13 +129,30 @@ void* writerBehaviour(void* arg) // will be in a while loop?
     return NULL;
 }
 
-void* readerBehaviour(void* arg)
+void* writerWriteFromFile(void* arg)
+{
+    time_t start = time(NULL);
+    time_t end = start + 10;
+
+    int rnd;
+
+    while (end > time(NULL))
+    {
+        rnd = rand() % 100;
+
+
+    }
+
+    return NULL;
+}
+
+void* readerBehaviour(void* arg) // example function
 {
 
     size_t data_to_read = 100;
     int my_reader_id = 0;
 
-    int availableData;
+    size_t availableData;
 
     pthread_mutex_lock(&buffer_lock);
 
@@ -136,9 +166,9 @@ void* readerBehaviour(void* arg)
     {
         pthread_mutex_lock(&buffer_lock);
 
-        while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < (int) data_to_read) && (buffer.writerFinished == false))
+        while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < data_to_read) && (buffer.writerFinished == false))
         {
-            printf("Available data: %d\n", availableData);
+            printf("Available data: %ld\n", availableData);
 
             pthread_cond_wait(&data_available, &buffer_lock);
         }
@@ -174,9 +204,11 @@ void* readerWriteToFile(void* arg)
     size_t availableData;
     size_t readLen; 
 
+    FILE *fptr = (FILE*) arg;
+
     // set values
     size_t data_to_read = 100;
-    int my_reader_id = 0;
+    
 
     // get reader buffer
     uint8_t* readerBuffer = malloc(data_to_read);
@@ -185,6 +217,7 @@ void* readerWriteToFile(void* arg)
     pthread_mutex_lock(&buffer_lock);
 
     //buffer.readerTails[my_reader_id] = buffer.data_head;
+    int my_reader_id = buffer.reader_cnt;
     buffer.readerOffset[my_reader_id] = buffer.data_head_offset;
     buffer.reader_cnt++;
 
@@ -194,12 +227,19 @@ void* readerWriteToFile(void* arg)
     {
         pthread_mutex_lock(&buffer_lock);
         // find if enough data or writer finished
-        while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < (int) data_to_read) && (buffer.writerFinished == false))
+        while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < data_to_read) && (buffer.writerFinished == false))
         {
+            printf("Available data: %ld\n", availableData);
+
             pthread_cond_wait(&data_available, &buffer_lock);
         }
         // enough data or writer finished
         pthread_mutex_unlock(&buffer_lock);
+
+        if (availableData == 0) // writer finished and no data to read
+        {
+            break;
+        }
 
         if (availableData < data_to_read)
         {
@@ -220,7 +260,11 @@ void* readerWriteToFile(void* arg)
         circularBufferConfirmRead(&buffer, my_reader_id, readLen);
 
         pthread_mutex_unlock(&buffer_lock);
+
+        printf("Read %ld of data.\n", readLen);
     }
+
+    printf("Reader thread finished.\n");
 
     return NULL;
 }
