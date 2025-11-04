@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <unistd.h>
+
 
 #include "ArgParser.h"
 
@@ -12,7 +14,7 @@
 #define BUFFER_SIZE_DEF 512000000 // 512 MB
 #define DATA_RATE_DEF 3*1024*1000 // 3KiB/ms
 
-void printAllArgs(int argc, char* argv[]);
+extern char* optarg;
 
 argParser parseArguments(int argc, char* argv[])
 {
@@ -141,6 +143,52 @@ argParser parseArguments(int argc, char* argv[])
     }
 
     return args;
+}
+
+argParser optargArguments(int argc, char* argv[])
+{
+    printAllArgs(argc, argv);
+
+    // default values
+    argParser args = {  
+                        .bufferSize = BUFFER_SIZE_DEF,
+        
+                        .dataSource = DATA_TYPE_ZEROS,
+                        .dataRate = DATA_RATE_DEF,
+                        .dataDestination = DATA_TYPE_ZEROS,
+
+                        .dataSourceString = NULL,
+                        .dataSourceFilename = NULL,
+                        .dataDestString = NULL,
+                        .dataDestFilename = NULL
+                    };
+
+    int opt;
+
+    while((opt = getopt(argc, argv, "hs:d:")) != -1)
+    {
+        switch (opt)
+        {
+        case 'h':
+            printf("Heres ur help lmao\n"); // TODO: print help
+            exit(0);
+            break;
+        
+        case 's':
+            if (strchr(optarg, ':') != NULL) // contains ':' -> is address
+            {
+                strdup(strtok(optarg, ':'), args.dataSourceString);
+                strdup(strtok(NULL, ':'), args.port);
+            }
+            else
+            {
+                args.dataSourceFilename = strdup(optarg);
+            }
+
+        default:
+            break;
+        }
+    }
 }
 
 void printAllArgs(int argc, char* argv[])

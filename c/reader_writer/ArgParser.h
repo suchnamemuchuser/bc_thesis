@@ -35,6 +35,8 @@ typedef struct {
 
     char* dataDestFilename;
 
+    int port;
+
     // socket pointer thing again?
 } argParser;
 
