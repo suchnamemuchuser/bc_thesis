@@ -11,144 +11,15 @@
 #include "ArgParser.h"
 
 #define READER_MAX_CAP 128
-#define BUFFER_SIZE_DEF 512000000 // 512 MB
-#define DATA_RATE_DEF 3*1024*1000 // 3KiB/ms
+#define BUFFER_SIZE_DEF 2000 // 512 MB
+#define DATA_RATE_DEF 100 //3*1024*1000 // 3KiB/ms
 
 extern char* optarg;
 
-argParser parseArguments(int argc, char* argv[])
-{
-    bool inputSet = false;
-
-    printAllArgs(argc, argv);
-
-    // default values
-    argParser args = {  
-                        .bufferSize = BUFFER_SIZE_DEF,
-        
-                        .dataSource = DATA_TYPE_ZEROS,
-                        .dataRate = DATA_RATE_DEF,
-                        .dataDestination = DATA_TYPE_ZEROS,
-
-                        .dataSourceString = NULL,
-                        .dataSourceFilename = NULL,
-                        .dataDestString = NULL,
-                        .dataDestFilename = NULL
-                    };
-
-    for (int i = 1 ; i < argc ; i++) // 1st arg is executable name
-    {
-        // help
-        if ((strcmp(argv[i], "-h") == 0) || (strcmp(argv[i], "--help") == 0))
-        {
-            printf("Heres ur help lmao\n"); // TODO: print help
-            exit(0);
-        }
-
-        else if ((strcmp(argv[i], "-z") == 0) || (strcmp(argv[i], "--zeros") == 0))
-        {
-            if (!inputSet) // setting input
-            {
-                args.dataSource = DATA_TYPE_ZEROS;
-                inputSet = true;
-            }
-            else // setting output
-            {
-                args.dataDestination = DATA_TYPE_ZEROS;
-            }
-        }
-
-        else if ((strcmp(argv[i], "-f") == 0) || (strcmp(argv[i], "--filename") == 0))
-        {
-            if (i == (argc - 1)) // last argument
-            {
-                printf("Expected argumnent after %s\n", argv[i]);
-                exit(1);
-            }
-
-            i++;
-
-            if (!inputSet) // setting input
-            {
-                args.dataSource = DATA_TYPE_FILE;
-
-                args.dataSourceString = strdup(argv[i]);
-
-                inputSet = true;
-            }
-            else // setting input
-            {
-                args.dataDestination = DATA_TYPE_FILE;
-
-                args.dataDestString = strdup(argv[i]);
-            }
-        }
-
-        else if ((strcmp(argv[i], "-n") == 0) || (strcmp(argv[i], "--network") == 0))
-        {
-            if (i == (argc - 1)) // last argument
-            {
-                printf("Expected argumnent after %s\n", argv[i]);
-                exit(1);
-            }
-
-            i++;
-
-            if (!inputSet) // setting input
-            {
-                args.dataSource = DATA_TYPE_NETWORK;
-
-                args.dataSourceString = strdup(argv[i]);
-
-                inputSet = true;
-            }
-            else // setting input
-            {
-                args.dataDestination = DATA_TYPE_NETWORK;
-
-                args.dataDestString = strdup(argv[i]);
-            }
-        }
-
-        else if ((strcmp(argv[i], "-r") == 0) || (strcmp(argv[i], "--rate") == 0))
-        {
-            if (i == (argc - 1)) // last argument
-            {
-                printf("Expected argumnent after %s\n", argv[i]);
-                exit(1);
-            }
-
-            i++;
-
-            if (!inputSet) // setting input
-            {
-                args.dataSource = DATA_TYPE_NETWORK;
-
-                args.dataSourceString = strdup(argv[i]);
-
-                inputSet = true;
-            }
-        }
-
-        else
-        {
-            printf("Unknown argument: %s\n", argv[i]);
-            exit(1);
-        }
-    }
-
-    if (args.dataDestination == DATA_TYPE_ZEROS)
-    {
-        args.dataDestFilename = "/dev/null";
-    }
-
-    return args;
-}
+void printArgs(argParser args);
 
 argParser optargArguments(int argc, char* argv[])
 {
-    printAllArgs(argc, argv);
-
     // default values
     argParser args = {  
                         .bufferSize = BUFFER_SIZE_DEF,
@@ -165,7 +36,7 @@ argParser optargArguments(int argc, char* argv[])
 
     int opt;
 
-    while((opt = getopt(argc, argv, "hs:d:")) != -1)
+    while((opt = getopt(argc, argv, "hs:d:r:b:")) != -1)
     {
         switch (opt)
         {
@@ -174,21 +45,82 @@ argParser optargArguments(int argc, char* argv[])
             exit(0);
             break;
         
+        // source - domain:port or filename
         case 's':
-            if (strchr(optarg, ':') != NULL) // contains ':' -> is address
+            // contains ':' -> is address
+            if (strchr(optarg, ':') != NULL)
             {
-                strdup(strtok(optarg, ':'), args.dataSourceString);
-                strdup(strtok(NULL, ':'), args.port);
+                args.dataSourceString = strdup(strtok(optarg, ":"));
+                args.srcPort = atoi(strtok(NULL, ":"));
+                args.dataSource = DATA_TYPE_NETWORK;
             }
+            // is filename
             else
             {
                 args.dataSourceFilename = strdup(optarg);
+                args.dataSource = DATA_TYPE_FILE;
             }
+            break;
+
+        // destination - domain:port or filename
+        case 'd':
+            // contains ':' -> is address
+            if (strchr(optarg, ':') != NULL)
+            {
+                args.dataDestString = strdup(strtok(optarg, ":"));
+                args.destPort = atoi(strtok(NULL, ":"));
+                args.dataDestination = DATA_TYPE_NETWORK;
+            }
+            // is filename
+            else
+            {
+                args.dataDestFilename = strdup(optarg);
+                args.dataDestination = DATA_TYPE_FILE;
+            }
+            break;
+
+        // Data rate in B/s
+        case 'r':
+            if (atoi(optarg) == 0)
+            {
+                printf("Invalid data rate: %s\n", optarg);
+                exit(1);
+            }
+
+            args.dataRate = atoi(optarg);
+            break;
+
+        // buffer size
+        case 'b':
+            if (atoi(optarg) == 0)
+            {
+                printf("Invalid buffer size: %s\n", optarg);
+                exit(1);
+            }
+
+            args.bufferSize = atoi(optarg);
+            break;
 
         default:
             break;
         }
     }
+
+    if (args.dataSource == DATA_TYPE_ZEROS)
+    {
+        args.dataSourceFilename = strdup("/dev/zero");
+    }
+
+    if (args.dataDestination == DATA_TYPE_ZEROS)
+    {
+        args.dataDestFilename = strdup("/dev/zero");
+    }
+
+    
+
+    printArgs(args);
+
+    return args;
 }
 
 void printAllArgs(int argc, char* argv[])
@@ -198,6 +130,62 @@ void printAllArgs(int argc, char* argv[])
     for (int i = 0 ; i < argc ; i++)
     {
         printf("%d.  : %s\n", i, argv[i]);
+    }
+}
+
+void printArgs(argParser args)
+{
+    printf("Args:\n");
+
+    printf("Buffersize: %d\n", args.bufferSize);
+    printf("Data rate: %d\n", args.dataRate);
+    
+    printf("\nSource: \n");
+    if (args.dataSource == DATA_TYPE_NETWORK)
+    {
+        printf("Network source: %s:%d\n", args.dataSourceString, args.srcPort);
+    }
+    else
+    {
+        printf("File source: %s\n", args.dataSourceFilename);
+    }
+    
+
+    printf("\nDestination: \n");
+    if (args.dataDestination == DATA_TYPE_NETWORK)
+    {
+        printf("Network destination: %s:%d\n", args.dataDestString, args.destPort);
+    }
+    else
+    {
+        printf("File destination: %s\n", args.dataDestFilename);
+    }
+}
+
+void freeArgs(argParser args)
+{
+    if (args.dataSourceString == NULL)
+    {
+        free(args.dataSourceString);
+        args.dataSourceString = NULL;
+    }
+
+    if (args.dataSourceFilename == NULL)
+    {
+        free(args.dataSourceFilename);
+        args.dataSourceFilename = NULL;
+    }
+
+    if (args.dataDestString == NULL)
+    {
+        free(args.dataDestString);
+        args.dataDestString = NULL;
+    }
+
+    if (args.dataDestFilename == NULL)
+    {
+        free(args.dataDestFilename);
+        args.dataDestFilename = NULL;
     }
 }
 

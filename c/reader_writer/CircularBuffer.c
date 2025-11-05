@@ -56,29 +56,43 @@ void circularBufferFree(circularBuffer* buffer)
 
 int circularBufferWrite(circularBuffer* buffer, size_t writeLen)
 {
-    //uint8_t* minTail = buffer->readerTails[0]; // find minimal tail (tail closest in front of data_head)
-
-    size_t minTail = buffer->readerOffset[0];
-
-    size_t availableSpace = buffer->data_len; // default is empty buffer
-
-    if (minTail < buffer->data_head_offset) // calculate space left to minimal tail
-    {
-        availableSpace = (buffer->data_len - buffer->data_head_offset) + (minTail);
-    }
-    else if (minTail > buffer->data_head_offset)
-    {
-        availableSpace = minTail - buffer->data_head_offset;
-    }
-    
-    if (availableSpace < writeLen) // not enough space to write because of a reader
-    {
-        return -1;
-    }
-
     buffer->data_head_offset = (buffer->data_head_offset + writeLen) % buffer->data_len;
 
     return 0;
+}
+
+size_t circularBufferWriterSpace(circularBuffer* buffer)
+{
+    size_t minSpace = buffer->data_len - 1;
+
+    for (int i = 0 ; i < buffer->reader_cnt ; i++)
+    {
+        size_t tail = buffer->readerOffset[i];
+
+        size_t rawWriterSpace = (tail - buffer->data_head_offset + buffer->data_len) % buffer->data_len;
+
+        size_t writerSpace;
+    
+        if (rawWriterSpace == 0)
+        {
+            // head == tail. This means the buffer is EMPTY for this reader.
+            // The writer can write (buffer_size - 1) bytes.
+            writerSpace = buffer->data_len - 1;
+        }
+        else
+        {
+            // This is the number of empty slots.
+            // We must subtract 1 for the guard slot.
+            writerSpace = rawWriterSpace - 1;
+        }
+
+        if (writerSpace < minSpace)
+        {
+            minSpace = writerSpace;
+        }
+    }
+
+    return minSpace;
 }
 
 int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readLen)

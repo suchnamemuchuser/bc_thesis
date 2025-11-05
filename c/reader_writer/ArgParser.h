@@ -1,16 +1,19 @@
 #ifndef ARGPARSER_H
 #define ARGPARSER_H
 
-typedef enum {
+typedef enum datatype {
     DATA_TYPE_ZEROS, // does this as destination mean write into /dev/null or just discard data?
     DATA_TYPE_FILE,
     DATA_TYPE_NETWORK
 } dataType;
 
-typedef struct {
+typedef struct argparser {
 
     // buffer info
     int bufferSize; // -b || --buffer-size       ?? in (k/m)bytes?
+
+    // desired data rate in B/s
+    int dataRate; // -r
 
 
 
@@ -21,12 +24,11 @@ typedef struct {
 
     char* dataSourceFilename;
 
+    int srcPort;
+    
     // socket pointer thing for address?
 
-    // desired data rate in B/s
-    int dataRate; // -r || --rate
-
-
+    
 
     // Reader
     dataType dataDestination; // ZEROS means /dev/null // -d || --destination : z, f, n
@@ -35,11 +37,16 @@ typedef struct {
 
     char* dataDestFilename;
 
-    int port;
+    int destPort;
 
     // socket pointer thing again?
 } argParser;
 
 argParser parseArguments(int argc, char* argv[]);
+
+argParser optargArguments(int argc, char* argv[]);
+
+void freeArgs(argParser args);
+
 
 #endif

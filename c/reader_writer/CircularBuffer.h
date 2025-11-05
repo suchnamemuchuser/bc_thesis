@@ -4,9 +4,6 @@
 #include <stdbool.h>
 
 #define READER_MAX_CAP 128
-#define BUFFER_DEF_SIZ 512000000 // 512 MB
-
-
 
 typedef struct
 {
@@ -35,6 +32,8 @@ int circularBufferInit(circularBuffer* buffer, int bufferSize);
 void circularBufferFree(circularBuffer* buffer);
 
 int circularBufferWrite(circularBuffer* buffer, size_t writeLen);
+
+size_t circularBufferWriterSpace(circularBuffer* buffer);
 
 int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readLen);
 
