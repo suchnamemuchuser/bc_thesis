@@ -10,9 +10,8 @@
 
 #include "ArgParser.h"
 
-#define READER_MAX_CAP 128
-#define BUFFER_SIZE_DEF 2000 // 512 MB
-#define DATA_RATE_DEF 100 //3*1024*1000 // 3KiB/ms
+#define BUFFER_SIZE_DEF 2000
+#define DATA_RATE_DEF 100
 
 extern char* optarg;
 
@@ -113,7 +112,7 @@ argParser optargArguments(int argc, char* argv[])
 
     if (args.dataDestination == DATA_TYPE_ZEROS)
     {
-        args.dataDestFilename = strdup("/dev/zero");
+        args.dataDestFilename = strdup("fileout"); // TODO: change to /dev/zero
     }
 
     
@@ -164,25 +163,25 @@ void printArgs(argParser args)
 
 void freeArgs(argParser args)
 {
-    if (args.dataSourceString == NULL)
+    if (args.dataSourceString != NULL)
     {
         free(args.dataSourceString);
         args.dataSourceString = NULL;
     }
 
-    if (args.dataSourceFilename == NULL)
+    if (args.dataSourceFilename != NULL)
     {
         free(args.dataSourceFilename);
         args.dataSourceFilename = NULL;
     }
 
-    if (args.dataDestString == NULL)
+    if (args.dataDestString != NULL)
     {
         free(args.dataDestString);
         args.dataDestString = NULL;
     }
 
-    if (args.dataDestFilename == NULL)
+    if (args.dataDestFilename != NULL)
     {
         free(args.dataDestFilename);
         args.dataDestFilename = NULL;

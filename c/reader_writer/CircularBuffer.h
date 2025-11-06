@@ -31,7 +31,9 @@ int circularBufferInit(circularBuffer* buffer, int bufferSize);
 
 void circularBufferFree(circularBuffer* buffer);
 
-int circularBufferWrite(circularBuffer* buffer, size_t writeLen);
+int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len);
+
+int circularBufferConfirmWrite(circularBuffer* buffer, size_t writeLen);
 
 size_t circularBufferWriterSpace(circularBuffer* buffer);
 

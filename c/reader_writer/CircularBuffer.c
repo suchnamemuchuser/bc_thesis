@@ -54,22 +54,55 @@ void circularBufferFree(circularBuffer* buffer)
     buffer->data_len = 0;
 }
 
-int circularBufferWrite(circularBuffer* buffer, size_t writeLen)
+int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len)
 {
-    buffer->data_head_offset = (buffer->data_head_offset + writeLen) % buffer->data_len;
+    if (len == 0)
+    {
+        return 0;
+    }
+    
+    uint8_t* write_ptr = cb->data_ptr + cb->data_head_offset;
+
+    // Calculate space before end of buffer
+    size_t space_to_end = cb->data_len - cb->data_head_offset;
+
+    if (len <= space_to_end)
+    {
+        // single copy
+        memcpy(write_ptr, src, len);
+    }
+    else
+    {
+        // two copies.
+        size_t first_chunk_len = space_to_end;
+        size_t second_chunk_len = len - first_chunk_len;
+
+        memcpy(write_ptr, src, first_chunk_len);
+
+        memcpy(cb->data_ptr, src + first_chunk_len, second_chunk_len);
+    }
+
+    circularBufferConfirmWrite(cb, len);
+
+    return len;
+}
+
+int circularBufferConfirmWrite(circularBuffer* cb, size_t writeLen)
+{
+    cb->data_head_offset = (cb->data_head_offset + writeLen) % cb->data_len;
 
     return 0;
 }
 
-size_t circularBufferWriterSpace(circularBuffer* buffer)
+size_t circularBufferWriterSpace(circularBuffer* cb)
 {
-    size_t minSpace = buffer->data_len - 1;
+    size_t minSpace = cb->data_len - 1;
 
-    for (int i = 0 ; i < buffer->reader_cnt ; i++)
+    for (int i = 0 ; i < cb->reader_cnt ; i++)
     {
-        size_t tail = buffer->readerOffset[i];
+        size_t tail = cb->readerOffset[i];
 
-        size_t rawWriterSpace = (tail - buffer->data_head_offset + buffer->data_len) % buffer->data_len;
+        size_t rawWriterSpace = (tail - cb->data_head_offset + cb->data_len) % cb->data_len;
 
         size_t writerSpace;
     
@@ -77,7 +110,7 @@ size_t circularBufferWriterSpace(circularBuffer* buffer)
         {
             // head == tail. This means the buffer is EMPTY for this reader.
             // The writer can write (buffer_size - 1) bytes.
-            writerSpace = buffer->data_len - 1;
+            writerSpace = cb->data_len - 1;
         }
         else
         {
@@ -95,51 +128,49 @@ size_t circularBufferWriterSpace(circularBuffer* buffer)
     return minSpace;
 }
 
-int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readLen)
+int circularBufferConfirmRead(circularBuffer* cb, int readerId, size_t readLen)
 {
-    buffer->readerOffset[readerId] = (buffer->readerOffset[readerId] + readLen) % buffer->data_len; // update offset
-
-    //buffer->readerTails[readerId] = buffer->data_ptr + ((buffer->readerOffset[readerId] + readLen) % buffer->data_len); // update ptr
+    cb->readerOffset[readerId] = (cb->readerOffset[readerId] + readLen) % cb->data_len; // update offset
 
     return readLen;
 }
 
-int circularBufferAvailableData(circularBuffer* buffer, int readerId)
+int circularBufferAvailableData(circularBuffer* cb, int readerId)
 {
     int spaceLeft = 0;
 
-    if (buffer->readerOffset[readerId] < buffer->data_head_offset)
+    if (cb->readerOffset[readerId] < cb->data_head_offset)
     {
-        spaceLeft = buffer->data_head_offset - buffer->readerOffset[readerId];
+        spaceLeft = cb->data_head_offset - cb->readerOffset[readerId];
     }
-    else if (buffer->readerOffset[readerId] > buffer->data_head_offset)
+    else if (cb->readerOffset[readerId] > cb->data_head_offset)
     {
-        spaceLeft = (buffer->data_len - buffer->readerOffset[readerId]) + buffer->data_head_offset;
+        spaceLeft = (cb->data_len - cb->readerOffset[readerId]) + cb->data_head_offset;
     }
 
     return spaceLeft;
 }
 
-int circularBufferReadData(circularBuffer* buffer, int readerId, size_t readLen, uint8_t* readerBuffer)
+int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t* readerBuffer)
 {
-    if (buffer->data_head_offset > buffer->readerOffset[readerId])
+    if (cb->data_head_offset > cb->readerOffset[readerId])
     {
-        memcpy(readerBuffer, buffer->data_ptr+buffer->readerOffset[readerId], readLen);
+        memcpy(readerBuffer, cb->data_ptr+cb->readerOffset[readerId], readLen);
 
         return readLen;
     }
 
-    if ((buffer->data_len - buffer->readerOffset[readerId]) >= readLen)
+    if ((cb->data_len - cb->readerOffset[readerId]) >= readLen)
     {
-        memcpy(readerBuffer, buffer->data_ptr+buffer->readerOffset[readerId], readLen);
+        memcpy(readerBuffer, cb->data_ptr+cb->readerOffset[readerId], readLen);
 
         return readLen;
     }
 
-    int spaceToEnd = buffer->data_len - buffer->readerOffset[readerId];
+    int spaceToEnd = cb->data_len - cb->readerOffset[readerId];
 
-    memcpy(readerBuffer, (buffer->data_ptr + buffer->readerOffset[readerId]), spaceToEnd);
-    memcpy(readerBuffer + spaceToEnd, buffer->data_ptr, readLen - spaceToEnd);
+    memcpy(readerBuffer, (cb->data_ptr + cb->readerOffset[readerId]), spaceToEnd);
+    memcpy(readerBuffer + spaceToEnd, cb->data_ptr, readLen - spaceToEnd);
 
     return readLen;
 }

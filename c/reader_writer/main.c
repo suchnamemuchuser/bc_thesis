@@ -28,6 +28,8 @@ int main(int argc, char* argv[]){
 
     arguments = optargArguments(argc, argv);
 
+    srand(time(NULL));
+
     // init mutex, conds
     pthread_mutex_init(&buffer_lock, NULL);
     pthread_cond_init(&data_available, NULL);
@@ -40,14 +42,24 @@ int main(int argc, char* argv[]){
     printf("Length:  %ld\n", buffer.data_len);
     printf("Offset:  %ld\n", buffer.data_head_offset);
 
-    FILE *fptr1 = fopen("file1", "w");
+    FILE *rdfptr = fopen(arguments.dataSourceFilename, "r");
+
+    if (rdfptr == NULL)
+    {
+       perror("Error opening file");
+       return 1;
+    }
+
+
+
+    FILE *fptr1 = fopen(arguments.dataDestFilename, "w");
 
     pthread_t writer_thread;
     pthread_t reader_thread1;
 
     printf("Starting threads...\n");
 
-    if (pthread_create(&writer_thread, NULL, writerBehaviour, NULL)) 
+    if (pthread_create(&writer_thread, NULL, writerWriteFromFile, (void*) rdfptr)) 
     {
         fprintf(stderr, "Error creating writer thread\n");
         return 1;
@@ -62,6 +74,8 @@ int main(int argc, char* argv[]){
     pthread_join(writer_thread, NULL);
 
     printf("Writer finished. Cleaning up.\n");
+
+    fclose(rdfptr);
 
     pthread_join(reader_thread1, NULL);
 
@@ -100,13 +114,7 @@ void* writerBehaviour(void* arg) // will be in a while loop?
             continue;
         }
 
-        int ret = circularBufferWrite(&buffer, 30);
-
-        if (ret < 0)
-        {
-            printf("Writer has no space to write!\n");
-            return NULL;
-        }
+        circularBufferConfirmWrite(&buffer, 30);
 
         pthread_cond_broadcast(&data_available);
 
@@ -131,14 +139,67 @@ void* writerWriteFromFile(void* arg)
     time_t start = time(NULL);
     time_t end = start + 10;
 
+    uint8_t *read_buffer = malloc(arguments.dataRate); // maximum read size
+
+
+
+    FILE* file = (FILE*) arg;
+
     int rnd;
+
+    size_t rndcount;
 
     while (end > time(NULL))
     {
-        rnd = rand() % 100;
+        rnd = rand() % 1000; // get range from 0 to 999 - 
 
+        usleep(rnd * 1000); // in microseconds
 
+        // calculate appropriate amound of data
+        rndcount = (rnd * arguments.dataRate + 500) / 1000; // + 500 rounds up
+
+        if (rndcount > arguments.dataRate)
+        {
+            rndcount = arguments.dataRate;
+        }
+
+        if (rndcount == 0)
+        {
+            continue;
+        }
+
+        printf("reading %d data\n", rndcount);
+
+        int read_count = fread(read_buffer, sizeof(uint8_t), rndcount, file);
+
+        pthread_mutex_lock(&buffer_lock);
+
+        // if no space, print error and discard data
+        size_t space = circularBufferWriterSpace(&buffer);
+
+        if (space >= read_count)
+        {
+            circularBufferMemWrite(&buffer, read_buffer, read_count);
+        }
+
+        // check EOF
+        if (feof(file))
+        {
+            break; // Exit the loop
+        }
+
+        pthread_cond_broadcast(&data_available);
+
+        pthread_mutex_unlock(&buffer_lock);
+
+        printf("Wrote %d bytes of data.\n", read_count);
     }
+
+    buffer.writerFinished = true;
+
+    pthread_cond_broadcast(&data_available);
+
+    pthread_mutex_unlock(&buffer_lock);
 
     return NULL;
 }
@@ -261,7 +322,7 @@ void* readerWriteToFile(void* arg)
         printf("Read %ld of data.\n", readLen);
     }
 
-    if (readerBuffer == NULL)
+    if (readerBuffer != NULL)
     {
         free(readerBuffer);
     }
