@@ -151,26 +151,21 @@ int circularBufferAvailableData(circularBuffer* cb, int readerId)
     return spaceLeft;
 }
 
-int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t* readerBuffer)
+int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr)
 {
-    if (cb->data_head_offset > cb->readerOffset[readerId])
-    {
-        memcpy(readerBuffer, cb->data_ptr+cb->readerOffset[readerId], readLen);
+    *read_ptr = cb->data_ptr + cb->readerOffset[readerId];
 
+    if (cb->readerOffset[readerId] < cb->data_head_offset)
+    {
         return readLen;
     }
 
     if ((cb->data_len - cb->readerOffset[readerId]) >= readLen)
     {
-        memcpy(readerBuffer, cb->data_ptr+cb->readerOffset[readerId], readLen);
-
         return readLen;
     }
 
     int spaceToEnd = cb->data_len - cb->readerOffset[readerId];
 
-    memcpy(readerBuffer, (cb->data_ptr + cb->readerOffset[readerId]), spaceToEnd);
-    memcpy(readerBuffer + spaceToEnd, cb->data_ptr, readLen - spaceToEnd);
-
-    return readLen;
+    return spaceToEnd;
 }
