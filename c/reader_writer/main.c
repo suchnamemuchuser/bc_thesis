@@ -1,3 +1,5 @@
+#define _XOPEN_SOURCE 700 // fix incomplete struct addrinfo
+
 #include <stdio.h>
 //#include <stdlib.h>
 #include <pthread.h>
@@ -27,6 +29,8 @@ argParser arguments;
 void* writerBehaviour(void* arg);
 
 void* writerWriteFromFile(void* arg);
+
+void* writerReadFromNetwork(void* arg);
 
 void* readerBehaviour(void* arg);
 
@@ -60,6 +64,8 @@ int main(int argc, char* argv[]){
 
     // open files if needed (should always be)
 
+
+    // source is file
     if (arguments.dataSource == DATA_TYPE_FILE)
     {
         reader_fptr = fopen(arguments.dataSourceFilename, "r");
@@ -71,6 +77,7 @@ int main(int argc, char* argv[]){
         }
     }
     
+    // destination is file
     if (arguments.dataDestination == DATA_TYPE_FILE)
     {
         writer_fptr = fopen(arguments.dataDestFilename, "w");
@@ -91,13 +98,12 @@ int main(int argc, char* argv[]){
     printf("Starting threads...\n");
 
     // start reader thread first
-
     if (arguments.dataDestination == DATA_TYPE_FILE)
     {
         if (pthread_create(&reader_thread1, NULL, readerWriteToFile, (void*) writer_fptr))
         {
             fprintf(stderr, "Error creating reader thread\n");
-            return 1;
+            exit(1);
         }
     }
     else if (arguments.dataDestination == DATA_TYPE_NETWORK)
@@ -105,19 +111,31 @@ int main(int argc, char* argv[]){
         if (pthread_create(&reader_thread1, NULL, readerWriteToNetwork, NULL))
         {
             fprintf(stderr, "Error creating reader thread\n");
-            return 1;
+            exit(1);
         }
     }
 
-    // then writer thread
-
-    if (pthread_create(&writer_thread, NULL, writerWriteFromFile, (void*) reader_fptr)) 
+    if (arguments.dataSource == DATA_TYPE_FILE)
     {
-        fprintf(stderr, "Error creating writer thread\n");
+        if (pthread_create(&writer_thread, NULL, writerWriteFromFile, (void*) reader_fptr)) 
+        {
+            fprintf(stderr, "Error creating writer thread\n");
 
-        pthread_cancel(reader_thread1);
-        return 1;
+            pthread_cancel(reader_thread1);
+            exit(1);
+        }
     }
+    else if (arguments.dataSource == DATA_TYPE_NETWORK)
+    {
+        if (pthread_create(&writer_thread, NULL, writerReadFromNetwork, NULL)) 
+        {
+            fprintf(stderr, "Error creating writer thread\n");
+
+            pthread_cancel(reader_thread1);
+            exit(1);
+        }
+    }
+
     
     // wait for threads
 
@@ -125,7 +143,7 @@ int main(int argc, char* argv[]){
 
     printf("Writer finished. Cleaning up.\n");
 
-    fclose(reader_fptr);
+    if (reader_fptr != NULL) fclose(reader_fptr);
 
     pthread_join(reader_thread1, NULL);
 
@@ -197,7 +215,7 @@ void* writerWriteFromFile(void* arg)
 
     size_t rndcount;
 
-    while (end > time(NULL))
+    while (true)
     {
         rnd = rand() % 1000; // get range from 0 to 999 - 
 
@@ -253,6 +271,142 @@ void* writerWriteFromFile(void* arg)
 
     pthread_cond_broadcast(&data_available);
 
+    pthread_mutex_unlock(&buffer_lock);
+
+    return NULL;
+}
+
+void* writerReadFromNetwork(void* arg)
+{
+    // --- CLIENT NETWORK STUFF ---
+    int sockfd;
+    struct addrinfo hints;
+    struct addrinfo *servinfo, *p;
+    int rv;
+    char port_str[6];
+
+    (void)arg; // (arg is unused)
+
+    snprintf(port_str, sizeof(port_str), "%d", arguments.srcPort);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    printf("Writer: Resolving %s:%s\n", arguments.dataSourceString, port_str);
+    if ((rv = getaddrinfo(arguments.dataSourceString, port_str, &hints, &servinfo)) != 0)
+    {
+        fprintf(stderr, "writer getaddrinfo: %s\n", gai_strerror(rv));
+
+        // Tell the readers that we are done
+        pthread_mutex_lock(&buffer_lock);
+        buffer.writerFinished = true;
+        pthread_cond_broadcast(&data_available); // Wake up readers one last time
+        pthread_mutex_unlock(&buffer_lock);
+
+        return NULL;
+    }
+
+    // Connect loop
+    for (p = servinfo; p != NULL; p = p->ai_next)
+    {
+        if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+        {
+            perror("writer: socket");
+            continue;
+        }
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+        {
+            close(sockfd);
+            perror("writer: connect");
+            continue;
+        }
+        break; // Connected
+    }
+
+    if (p == NULL)
+    {
+        fprintf(stderr, "writer: failed to connect to %s\n", arguments.dataSourceString);
+        freeaddrinfo(servinfo);
+
+        // Tell the readers that we are done
+        pthread_mutex_lock(&buffer_lock);
+        buffer.writerFinished = true;
+        pthread_cond_broadcast(&data_available); // Wake up readers one last time
+        pthread_mutex_unlock(&buffer_lock);
+
+        return NULL;
+    }
+
+    freeaddrinfo(servinfo);
+    printf("Writer: Connected to %s:%d. Starting to receive data.\n",
+           arguments.dataSourceString, arguments.srcPort);
+
+    // --- BUFFER-WRITING LOGIC ---
+    
+    // Use arguments.dataRate as the *maximum size* of our read buffer
+    size_t read_buffer_size = arguments.dataRate;
+    uint8_t *read_buffer = malloc(read_buffer_size);
+    if (read_buffer == NULL)
+    {
+        fprintf(stderr, "Writer: Failed to allocate read buffer\n");
+        close(sockfd);
+        return NULL;
+    }
+
+    ssize_t bytes_received;
+
+    // Loop until the server closes the connection
+    while (true)
+    {
+        // Block until data arrives or the connection is closed.
+        bytes_received = recv(sockfd, read_buffer, read_buffer_size, 0);
+
+        if (bytes_received == 0)
+        {
+            printf("Writer: Connection closed by server.\n");
+            break; // Exit the loop
+        }
+        else if (bytes_received < 0)
+        {
+            perror("Writer: recv error");
+            break; // Exit the loop
+        }
+
+        // --- This is the locking logic from your writerWriteFromFile ---
+        
+        pthread_mutex_lock(&buffer_lock);
+        // if no space, print error and discard data
+        size_t space = circularBufferWriterSpace(&buffer);
+        pthread_mutex_unlock(&buffer_lock);
+
+        if (space >= (size_t)bytes_received)
+        {
+            // Call write function *outside* the lock, as per your design
+            circularBufferMemWrite(&buffer, read_buffer, bytes_received);
+        }
+        else
+        {
+            // Not enough space, we must drop the data
+            fprintf(stderr, "Writer: Buffer full! Dropping %zd bytes.\n", bytes_received);
+            // We still continue, and the broadcast will happen
+        }
+
+        // Wake up any waiting reader threads
+        pthread_mutex_lock(&buffer_lock);
+        pthread_cond_broadcast(&data_available);
+        pthread_mutex_unlock(&buffer_lock);
+        // --- End of specific locking logic ---
+    }
+
+    // --- Cleanup ---
+    printf("Writer: Network loop finished. Cleaning up.\n");
+    free(read_buffer);
+    close(sockfd);
+
+    // Tell the readers that we are done
+    pthread_mutex_lock(&buffer_lock);
+    buffer.writerFinished = true;
+    pthread_cond_broadcast(&data_available); // Wake up readers one last time
     pthread_mutex_unlock(&buffer_lock);
 
     return NULL;
@@ -391,7 +545,7 @@ void* readerWriteToFile(void* arg)
     return NULL;
 }
 
-void* readerWriteToNetwork(void* arg)
+void* readerWriteToNetworkOld(void* arg)
 {
     // network stuff
     int sockfd;
@@ -532,6 +686,185 @@ void* readerWriteToNetwork(void* arg)
 
     close(sockfd); // Close the network socket
     printf("Network reader thread finished.\n");
+
+    return NULL;
+}
+
+void* readerWriteToNetwork(void* arg)
+{
+    // --- SERVER NETWORK STUFF ---
+    int listen_fd, client_fd; // Listener socket, Client socket
+    struct addrinfo hints;
+    struct addrinfo *servinfo, *p;
+    int rv;
+    char port_str[6];
+    int yes = 1; // For setsockopt
+
+    // Client address info
+    struct sockaddr_storage their_addr;
+    socklen_t sin_size;
+
+    // Convert port to string (This is the port we will *listen* on)
+    snprintf(port_str, sizeof(port_str), "%d", arguments.destPort);
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;       // Use IPv4
+    hints.ai_socktype = SOCK_STREAM; // Use TCP
+    hints.ai_flags = AI_PASSIVE;     // Use my IP (tell getaddrinfo to prepare for bind())
+
+    printf("Server: Setting up listener on port %s\n", port_str);
+
+    // Get address info for binding. Use NULL for host to bind to all interfaces
+    if ((rv = getaddrinfo(NULL, port_str, &hints, &servinfo)) != 0)
+    {
+        fprintf(stderr, "server getaddrinfo: %s\n", gai_strerror(rv));
+        return NULL;
+    }
+
+    // Loop through all the results and bind to the first we can
+    for (p = servinfo; p != NULL; p = p->ai_next)
+    {
+        // Create a socket
+        if ((listen_fd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+        {
+            perror("server: socket");
+            continue;
+        }
+
+        // --- NEW: Allow port reuse ---
+        // This prevents "Address already in use" errors if you restart quickly
+        if (setsockopt(listen_fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(int)) == -1)
+        {
+            perror("setsockopt");
+            close(listen_fd);
+            continue; // Try the next address
+        }
+
+        // --- REPLACED connect() with bind() ---
+        if (bind(listen_fd, p->ai_addr, p->ai_addrlen) == -1)
+        {
+            close(listen_fd);
+            perror("server: bind");
+            continue;
+        }
+
+        break; // If we get here, we successfully bound
+    }
+
+    freeaddrinfo(servinfo); // All done with this structure
+
+    if (p == NULL)
+    {
+        fprintf(stderr, "server: failed to bind\n");
+        return NULL;
+    }
+
+    // --- NEW: listen() ---
+    // Mark the socket to listen for incoming connections
+    // Using a BACKLOG of 1 because this thread only handles one client.
+    if (listen(listen_fd, 1) == -1)
+    {
+        perror("listen");
+        return NULL;
+    }
+
+    printf("Server: Waiting for a connection on port %s...\n", port_str);
+
+    // --- NEW: accept() ---
+    // This is a blocking call. It waits until a client connects.
+    sin_size = sizeof their_addr;
+    client_fd = accept(listen_fd, (struct sockaddr *)&their_addr, &sin_size);
+    if (client_fd == -1)
+    {
+        perror("accept");
+        close(listen_fd);
+        return NULL;
+    }
+
+    // A client has connected!
+    // We can now close the *listening* socket, since we only want one client.
+    close(listen_fd);
+
+    printf("Server: Got connection! Starting data send.\n");
+
+    // --- FROM HERE, YOUR CIRCULAR BUFFER LOGIC IS THE SAME ---
+    // --- Just make sure to use 'client_fd' instead of 'sockfd' ---
+
+    size_t availableData;
+    size_t read_len;
+    uint8_t* read_ptr;
+    bool network_error = false;
+    size_t data_to_read = 10; // How much to try to read at once
+
+    pthread_mutex_lock(&buffer_lock);
+
+    int my_reader_id = buffer.reader_cnt;
+    buffer.readerOffset[my_reader_id] = buffer.data_head_offset;
+    buffer.reader_cnt++;
+
+    pthread_mutex_unlock(&buffer_lock);
+
+    while (1)
+    {
+        pthread_mutex_lock(&buffer_lock);
+        // find if enough data or writer finished
+        while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < data_to_read) && (buffer.writerFinished == false))
+        {
+            pthread_cond_wait(&data_available, &buffer_lock);
+        }
+
+        // enough data or writer finished
+        if (availableData == 0 && buffer.writerFinished) // writer finished and no data to read
+        {
+            pthread_mutex_unlock(&buffer_lock);
+            break; // Exit main loop
+        }
+        
+        if (availableData < data_to_read)
+        {
+            read_len = availableData;
+        }
+        else
+        {
+            read_len = data_to_read;
+        }
+
+        if (read_len == 0)
+        {
+             pthread_mutex_unlock(&buffer_lock);
+             continue; 
+        }
+
+        // get data pointer and actual readable length
+        read_len = circularBufferReadData(&buffer, my_reader_id, read_len, &read_ptr);
+
+        pthread_mutex_unlock(&buffer_lock);
+
+
+        // --- Send data over the new 'client_fd' socket ---
+        // (Assuming you have a 'sendall' helper function that handles partial sends)
+        if (sendall(client_fd, read_ptr, read_len) == -1)
+        {
+            fprintf(stderr, "Reader: network send failed.\n");
+            network_error = true;
+        }
+        // --- End of changed part ---
+
+
+        pthread_mutex_lock(&buffer_lock);
+
+        circularBufferConfirmRead(&buffer, my_reader_id, read_len);
+
+        pthread_mutex_unlock(&buffer_lock);
+
+        if (network_error)
+        {
+            break; // Exit loop on network error
+        }
+    }
+
+    close(client_fd); // Close the client's socket
+    printf("Network reader thread finished (client disconnected).\n");
 
     return NULL;
 }
