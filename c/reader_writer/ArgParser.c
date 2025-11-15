@@ -19,6 +19,8 @@ void printArgs(argParser args);
 
 argParser optargArguments(int argc, char* argv[])
 {
+    char *colon;
+
     // default values
     argParser args = {  
                         .bufferSize = BUFFER_SIZE_DEF,
@@ -46,12 +48,24 @@ argParser optargArguments(int argc, char* argv[])
         
         // source - domain:port or filename
         case 's':
+            colon = strchr(optarg, ':');
+            
             // contains ':' -> is address
-            if (strchr(optarg, ':') != NULL)
+            if (colon != NULL)
             {
-                args.dataSourceString = strdup(strtok(optarg, ":"));
-                args.srcPort = atoi(strtok(NULL, ":"));
+                // Temporarily split the string by replacing ':' with a null terminator
+                *colon = '\0'; 
+                
+                // The part before the colon is the domain (even if empty)
+                args.dataSourceString = strdup(optarg);
+                
+                // The part after the colon is the port
+                args.srcPort = atoi(colon + 1); 
+                
                 args.dataSource = DATA_TYPE_NETWORK;
+
+                // You can optionally restore the colon, but it's not needed here
+                // *colon = ':'; 
             }
             // is filename
             else
@@ -63,11 +77,20 @@ argParser optargArguments(int argc, char* argv[])
 
         // destination - domain:port or filename
         case 'd':
+            colon = strchr(optarg, ':');
+
             // contains ':' -> is address
-            if (strchr(optarg, ':') != NULL)
+            if (colon != NULL)
             {
-                args.dataDestString = strdup(strtok(optarg, ":"));
-                args.destPort = atoi(strtok(NULL, ":"));
+                // Temporarily split the string
+                *colon = '\0';
+
+                // Part before colon (e.g., "" from ":55555")
+                args.dataDestString = strdup(optarg);
+
+                // Part after colon (e.g., "55555" from ":55555")
+                args.destPort = atoi(colon + 1);
+
                 args.dataDestination = DATA_TYPE_NETWORK;
             }
             // is filename
