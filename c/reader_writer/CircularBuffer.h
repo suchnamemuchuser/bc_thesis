@@ -42,3 +42,5 @@ int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readL
 int circularBufferAvailableData(circularBuffer* buffer, int readerId);
 
 int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr);
+
+void circularBufferPrintStatus(circularBuffer* cb);

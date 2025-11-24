@@ -82,8 +82,6 @@ int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len)
         memcpy(cb->data_ptr, src + first_chunk_len, second_chunk_len);
     }
 
-    circularBufferConfirmWrite(cb, len);
-
     return len;
 }
 

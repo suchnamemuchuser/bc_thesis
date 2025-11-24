@@ -16,6 +16,8 @@
 #include "CircularBuffer.h"
 #include "ArgParser.h"
 
+#define RECONNECT_DELAY_SECONDS 5
+
 pthread_mutex_t buffer_lock;
 
 pthread_cond_t data_available;
@@ -224,7 +226,7 @@ void* writerWriteFromFile(void* arg)
         // calculate appropriate amound of data
         rndcount = (rnd * arguments.dataRate + 500) / 1000; // + 500 rounds up
 
-        if (rndcount > arguments.dataRate)
+        if (rndcount > arguments.dataRate) // ensure no buffer overflow
         {
             rndcount = arguments.dataRate;
         }
@@ -234,7 +236,7 @@ void* writerWriteFromFile(void* arg)
             continue;
         }
 
-        printf("reading %d data\n", rndcount);
+        //printf("reading %d data\n", rndcount);
 
         int read_count = fread(read_buffer, sizeof(uint8_t), rndcount, file);
 
@@ -250,19 +252,23 @@ void* writerWriteFromFile(void* arg)
             circularBufferMemWrite(&buffer, read_buffer, read_count);
         }
 
-        // check EOF
-        if (feof(file))
-        {
-            break; // Exit the loop
-        }
+        //printf("%.*s\n", read_count, read_buffer);
 
         pthread_mutex_lock(&buffer_lock);
+
+        circularBufferConfirmWrite(&buffer, read_count);
 
         pthread_cond_broadcast(&data_available);
 
         pthread_mutex_unlock(&buffer_lock);
 
-        printf("Wrote %d bytes of data.\n", read_count);
+        //printf("Wrote %d bytes of data.\n", read_count);
+
+        // check EOF
+        if (feof(file))
+        {
+            break; // Exit the loop
+        }
     }
 
     pthread_mutex_lock(&buffer_lock);
@@ -276,7 +282,7 @@ void* writerWriteFromFile(void* arg)
     return NULL;
 }
 
-void* writerReadFromNetwork(void* arg)
+void* writerReadFromNetworkOld(void* arg)
 {
     // --- CLIENT NETWORK STUFF ---
     int sockfd;
@@ -393,6 +399,9 @@ void* writerReadFromNetwork(void* arg)
 
         // Wake up any waiting reader threads
         pthread_mutex_lock(&buffer_lock);
+
+        circularBufferConfirmWrite(&buffer, bytes_received);
+
         pthread_cond_broadcast(&data_available);
         pthread_mutex_unlock(&buffer_lock);
         // --- End of specific locking logic ---
@@ -412,9 +421,156 @@ void* writerReadFromNetwork(void* arg)
     return NULL;
 }
 
+void* writerReadFromNetwork(void* arg)
+{
+    int sockfd = -1;
+    struct addrinfo hints;
+    struct addrinfo *servinfo, *p;
+    int rv;
+    char port_str[6];
+    bool connected = false; // Flag to track successful connection
+
+    (void)arg;
+
+    // --- INITIAL SETUP (Happens once) ---
+    snprintf(port_str, sizeof(port_str), "%d", arguments.srcPort);
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    
+    // Allocate read buffer
+    size_t read_buffer_size = arguments.dataRate;
+    uint8_t *read_buffer = malloc(read_buffer_size);
+    if (read_buffer == NULL)
+    {
+        fprintf(stderr, "Writer: Failed to allocate read buffer\n");
+        // Signal readers to finish due to permanent error
+        pthread_mutex_lock(&buffer_lock);
+        buffer.writerFinished = true;
+        pthread_cond_broadcast(&data_available);
+        pthread_mutex_unlock(&buffer_lock);
+        return NULL;
+    }
+
+
+    // --- OUTER INFINITE RECONNECT LOOP ---
+    while (true)
+    {
+        connected = false; // Assume not connected at the start of each iteration
+
+        // 1. Resolve and Connect (Attempt connection)
+        printf("Writer: Attempting to connect to %s:%s\n", 
+               arguments.dataSourceString, port_str);
+               
+        servinfo = NULL; 
+        sockfd = -1; // Reset socket descriptor
+
+        // 1a. Resolve domain name
+        if ((rv = getaddrinfo(arguments.dataSourceString, port_str, &hints, &servinfo)) != 0)
+        {
+            fprintf(stderr, "writer getaddrinfo: %s\n", gai_strerror(rv));
+            // Resolution failed, skip connection attempt
+        }
+        else 
+        {
+            // 1b. Connect loop
+            for (p = servinfo; p != NULL; p = p->ai_next)
+            {
+                if ((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
+                {
+                    perror("writer: socket");
+                    continue;
+                }
+                if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1)
+                {
+                    close(sockfd);
+                    sockfd = -1;
+                    perror("writer: connect");
+                    continue;
+                }
+                connected = true; // Connection successful
+                break;
+            }
+            freeaddrinfo(servinfo); // Always free address info
+            
+            if (!connected)
+            {
+                fprintf(stderr, "writer: failed to connect to %s\n", arguments.dataSourceString);
+            }
+        }
+        
+        // 2. Data Reception Loop (Only runs if connected)
+        if (connected)
+        {
+            printf("Writer: Connected. Starting to receive data.\n");
+            ssize_t bytes_received;
+
+            while (connected) // Read loop continues as long as 'connected' is true
+            {
+                bytes_received = recv(sockfd, read_buffer, read_buffer_size, 0);
+
+                if (bytes_received <= 0) // Server closed connection (0) or error (< 0)
+                {
+                    if (bytes_received < 0)
+                    {
+                        perror("Writer: recv error");
+                    }
+                    else
+                    {
+                        printf("Writer: Connection closed by server.\n");
+                    }
+                    // Connection lost, exit read loop
+                    connected = false; 
+                    break;
+                }
+
+                // --- Buffer Writing Logic ---
+                pthread_mutex_lock(&buffer_lock);
+                size_t space = circularBufferWriterSpace(&buffer);
+                pthread_mutex_unlock(&buffer_lock);
+
+                if (space >= (size_t)bytes_received)
+                {
+                    circularBufferMemWrite(&buffer, read_buffer, bytes_received);
+                }
+                else
+                {
+                    fprintf(stderr, "Writer: Buffer full! Dropping %zd bytes.\n", bytes_received);
+                }
+
+                // Wake up any waiting reader threads
+                pthread_mutex_lock(&buffer_lock);
+
+                // confirm write under lock
+
+                circularBufferConfirmWrite(&buffer, bytes_received);
+                pthread_cond_broadcast(&data_available);
+                pthread_mutex_unlock(&buffer_lock);
+            } // End of Read loop
+            
+            // Connection was lost, close the bad socket
+            if (sockfd != -1) {
+                close(sockfd);
+                sockfd = -1; 
+            }
+        }
+
+        // 3. Mandatory Delay before Retrying
+        fprintf(stderr, "Writer: Retrying connection in %d seconds...\n", RECONNECT_DELAY_SECONDS);
+        sleep(RECONNECT_DELAY_SECONDS); 
+        
+        // Outer loop repeats
+    } // End of Outer Reconnect Loop
+    
+    // --- FINAL CLEANUP (If loop ever exits) ---
+    free(read_buffer);
+    // No need to signal writerFinished here as the loop is infinite by design
+    
+    return NULL;
+}
+
 void* readerBehaviour(void* arg) // example function
 {
-
     size_t data_to_read = 100;
     int my_reader_id = 0;
 
@@ -497,10 +653,12 @@ void* readerWriteToFile(void* arg)
         // find if enough data or writer finished
         while (((availableData = circularBufferAvailableData(&buffer, my_reader_id)) < data_to_read) && (buffer.writerFinished == false))
         {
-            printf("Available data: %ld\n", availableData);
+            //printf("Available data: %ld\n", availableData);
 
             pthread_cond_wait(&data_available, &buffer_lock);
         }
+
+        //printf("Reader available data: %ld\n", availableData);
         
         // enough data or writer finished
 
@@ -529,6 +687,9 @@ void* readerWriteToFile(void* arg)
 
         fwrite(read_ptr, sizeof(uint8_t), read_len, fptr);
 
+        //fflush(fptr);
+
+        //printf("%.*s\n", read_len, read_ptr);
 
 
         pthread_mutex_lock(&buffer_lock);
@@ -537,7 +698,7 @@ void* readerWriteToFile(void* arg)
 
         pthread_mutex_unlock(&buffer_lock);
 
-        printf("Read %ld of data.\n", read_len);
+        //printf("Read %ld of data.\n", read_len);
     }
 
     printf("Reader thread finished.\n");
@@ -872,11 +1033,11 @@ void* readerWriteToNetwork(void* arg)
 int sendall(int sockfd, const uint8_t *buf, size_t len)
 {
     size_t total_sent = 0;
+
     while (total_sent < len)
     {
-        // Use MSG_NOSIGNAL to prevent SIGPIPE on broken pipe,
-        // we'll handle the error return instead.
         ssize_t sent_now = send(sockfd, buf + total_sent, len - total_sent, MSG_NOSIGNAL);
+
         if (sent_now == -1)
         {
             if (errno == EPIPE || errno == ECONNRESET)
@@ -889,7 +1050,9 @@ int sendall(int sockfd, const uint8_t *buf, size_t len)
             }
             return -1; // Error occurred
         }
+
         total_sent += sent_now;
     }
+
     return 0; // Success
 }

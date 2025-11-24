@@ -137,7 +137,7 @@ argParser optargArguments(int argc, char* argv[])
 
     if (args.dataDestination == DATA_TYPE_ZEROS)
     {
-        args.dataDestFilename = strdup("fileout"); // TODO: change to /dev/zero
+        args.dataDestFilename = strdup("/dev/zero"); // TODO: change to /dev/zero
 
         args.dataDestination = DATA_TYPE_FILE;
     }
