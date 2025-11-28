@@ -54,8 +54,9 @@ dkms.conf
 # debug information files
 *.dwo
 
-# python venv
+# python venv - maybe hidden?
 astroEnv/
+.astroEnv/
 
 # python generated images
 python/*.png
