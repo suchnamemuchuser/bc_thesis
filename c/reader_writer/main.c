@@ -267,7 +267,6 @@ void* writerWriteFromFile(void* arg)
         // }
         
         circularBufferPrintStatus(&buffer);
-        printf("Read %d data\n", readDataCnt);
 
         circularBufferConfirmWrite(&buffer, read_count);
 
@@ -447,6 +446,8 @@ void* writerReadFromNetwork(void* arg)
     char port_str[6];
     bool connected = false; // Flag to track successful connection
 
+    int cnt = 0;
+
     (void)arg;
 
     // --- INITIAL SETUP (Happens once) ---
@@ -558,11 +559,18 @@ void* writerReadFromNetwork(void* arg)
                 // Wake up any waiting reader threads
                 pthread_mutex_lock(&buffer_lock);
 
+                if (cnt == 0)
+                {
+                    circularBufferPrintStatus(&buffer);
+                }
+
                 // confirm write under lock
 
                 circularBufferConfirmWrite(&buffer, bytes_received);
                 pthread_cond_broadcast(&data_available);
                 pthread_mutex_unlock(&buffer_lock);
+
+                cnt = (cnt + 1) % 100;
             } // End of Read loop
             
             // Connection was lost, close the bad socket
