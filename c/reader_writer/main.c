@@ -217,6 +217,10 @@ void* writerWriteFromFile(void* arg)
 
     size_t rndcount;
 
+    int cnt = 0;
+
+    size_t readDataCnt = 0;
+
     while (true)
     {
         rnd = rand() % 1000; // get range from 0 to 999 - 
@@ -240,6 +244,8 @@ void* writerWriteFromFile(void* arg)
 
         int read_count = fread(read_buffer, sizeof(uint8_t), rndcount, file);
 
+        readDataCnt += read_count;
+
         pthread_mutex_lock(&buffer_lock);
 
         // if no space, print error and discard data
@@ -256,6 +262,13 @@ void* writerWriteFromFile(void* arg)
 
         pthread_mutex_lock(&buffer_lock);
 
+        // if (cnt == 9)
+        // {
+        // }
+        
+        circularBufferPrintStatus(&buffer);
+        printf("Read %d data\n", readDataCnt);
+
         circularBufferConfirmWrite(&buffer, read_count);
 
         pthread_cond_broadcast(&data_available);
@@ -269,6 +282,10 @@ void* writerWriteFromFile(void* arg)
         {
             break; // Exit the loop
         }
+
+        cnt = (cnt + 1) % 10;
+
+        //printf("%d\n", cnt);
     }
 
     pthread_mutex_lock(&buffer_lock);

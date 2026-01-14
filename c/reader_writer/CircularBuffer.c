@@ -167,3 +167,31 @@ int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uin
 
     return spaceToEnd;
 }
+
+void circularBufferPrintStatus(circularBuffer* cb)
+{
+    if (cb->reader_cnt < 1)
+    {
+        printf("No readers\n");
+        return;
+    }
+    
+    size_t head = cb->data_head_offset;
+    size_t tail = cb->readerOffset[0];
+    size_t used_bytes = 0;
+
+    if (head >= tail)
+    {
+        used_bytes = head - tail;
+    }
+    else
+    {
+        used_bytes = (cb->data_len - tail) + head;
+    }
+
+    size_t free_bytes = cb->data_len - used_bytes;
+
+    float free_percent = ((float)free_bytes / (float)cb->data_len) * 100.0f;
+
+    printf("Buffer free space: %.2f%%\n", free_percent);
+}
