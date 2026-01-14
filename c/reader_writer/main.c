@@ -228,7 +228,7 @@ void* writerWriteFromFile(void* arg)
         usleep(rnd * 1000); // in microseconds
 
         // calculate appropriate amound of data
-        rndcount = (rnd * arguments.dataRate + 500) / 1000; // + 500 rounds up
+        rndcount = ((long long) rnd * arguments.dataRate + 500) / 1000; // + 500 rounds up
 
         if (rndcount > arguments.dataRate) // ensure no buffer overflow
         {
@@ -257,6 +257,10 @@ void* writerWriteFromFile(void* arg)
         {
             circularBufferMemWrite(&buffer, read_buffer, read_count);
         }
+        else
+        {
+            printf("Losing data: %d\n", read_count);
+        }
 
         //printf("%.*s\n", read_count, read_buffer);
 
@@ -269,7 +273,10 @@ void* writerWriteFromFile(void* arg)
         circularBufferPrintStatus(&buffer);
         printf("Read %d data\n", readDataCnt);
 
-        circularBufferConfirmWrite(&buffer, read_count);
+        if (space >= read_count)
+        {
+            circularBufferConfirmWrite(&buffer, read_count);
+        }
 
         pthread_cond_broadcast(&data_available);
 
