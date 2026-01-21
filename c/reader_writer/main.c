@@ -988,7 +988,7 @@ void* readerWriteToNetwork(void* arg)
     size_t read_len;
     uint8_t* read_ptr;
     bool network_error = false;
-    size_t data_to_read = 10; // How much to try to read at once
+    size_t data_to_read = 1000000; // How much to try to read at once
 
     pthread_mutex_lock(&buffer_lock);
 
