@@ -1,4 +1,5 @@
 #define _XOPEN_SOURCE 700 // fix incomplete struct addrinfo
+#define _DEFAULT_SOURCE // fix usleep warning
 
 #include <stdio.h>
 //#include <stdlib.h>
