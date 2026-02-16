@@ -490,7 +490,7 @@ void* writerReadFromNetwork(void* arg)
                
         servinfo = NULL; 
         sockfd = -1; // Reset socket descriptor
-
+        printf("Resolving dn\n");
         // 1a. Resolve domain name
         if ((rv = getaddrinfo(arguments.dataSourceString, port_str, &hints, &servinfo)) != 0)
         {
@@ -523,6 +523,8 @@ void* writerReadFromNetwork(void* arg)
             {
                 fprintf(stderr, "writer: failed to connect to %s\n", arguments.dataSourceString);
             }
+
+            printf("Connected?\n");
         }
         
         // 2. Data Reception Loop (Only runs if connected)
