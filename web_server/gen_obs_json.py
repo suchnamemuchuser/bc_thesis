@@ -128,7 +128,7 @@ def main():
     plt.title(f"Visibility at Ondrejov: {date_str}")
     
     img_name = f"plan.png"
-    plt.savefig(img_name, dpi=100)
+    #plt.savefig(img_name, dpi=100)
     plt.close()
 
     print(json.dumps({"date": date_str, "image": img_name, "targets": output_data}))
