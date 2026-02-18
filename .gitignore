@@ -63,3 +63,6 @@ python/*.png
 *.png
 
 debug.txt
+
+# database files
+*.db
