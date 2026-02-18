@@ -9,7 +9,7 @@ try {
         throw new Exception("No data received");
     }
 
-    $db = './plan.db';
+    $db = '../../plan.db';
     $dsn = "sqlite:$db";
     $pdo = new PDO($dsn);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
@@ -24,7 +24,8 @@ try {
     
     $obsStartTime = $recStartTime - 600; 
 
-    $checkSql = 'SELECT COUNT(*) FROM plan 
+    $checkSql = 'SELECT object_name, obs_start_time, end_time 
+                 FROM plan 
                  WHERE obs_start_time <= :new_end 
                  AND end_time >= :new_start';
                  
@@ -35,8 +36,23 @@ try {
     
     $overlapCount = $checkStmt->fetchColumn();
 
-    if ($overlapCount > 0) {
-        throw new Exception("Observation already planned for this time!");
+    $overlaps = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
+
+    if (!empty($overlaps)) {
+        $conflictDetails = [];
+        
+        foreach ($overlaps as $row) {
+            $startStr = date('H:i', $row['obs_start_time']);
+            $endStr = date('H:i', $row['end_time']);
+            
+            $name = $row['object_name'];
+            
+            $conflictDetails[] = "{$name} ({$startStr} - {$endStr})";
+        }
+        
+        $conflictList = implode(', ', $conflictDetails);
+        
+        throw new Exception("Time slot overlaps with: " . $conflictList);
     }
 
     $sql = 'INSERT INTO plan(object_name, is_interstellar, obs_start_time, rec_start_time, end_time)

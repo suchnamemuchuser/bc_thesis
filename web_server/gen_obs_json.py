@@ -55,7 +55,7 @@ def main():
     times = obs_time + delta_t
     plot_times = [start_dt + dt.timedelta(minutes=i) for i in range(len(delta_t))]
 
-    output_data = {}
+    output_data = []
     plt.figure(figsize=(10, 6))
     ax = plt.gca()
     ax.set_xlim([plot_times[0], plot_times[-1]])
@@ -64,7 +64,10 @@ def main():
         name = name.strip()
         target = resolve_target(name, location, obs_time)
         if not target:
-            output_data[name] = {"windows" : "Target not found"}
+            output_data.append({
+                "name" : name,
+                "windows" : "Target not found"
+                })
             continue
 
         altaz = target.transform_to(AltAz(obstime=times, location=ONDREJOV))
@@ -97,21 +100,24 @@ def main():
             if visible[0] and visible[-1]:
                 merged_start = last[0].strftime("%H:%M")
                 merged_end = first[1].strftime("%H:%M")
-                output_data[name] = {
+                output_data.append({
+                    "name" : name,
                     "location" : location,
                     "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows[1:-1]]
-                }
-                output_data[name]["windows"].append({"start": merged_start, "end": merged_end})
+                    })
+                output_data[i]["windows"].append({"start": merged_start, "end": merged_end})
             else:
-                output_data[name] = {
+                output_data.append({
+                    "name" : name,
                     "location" : location,
                     "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows] #[f"{w[0].strftime('%H:%M')} - {w[1].strftime('%H:%M')}" for w in windows]
-                }
+                })
         else:
-            output_data[name] = {
+            output_data.append({
+                    "name" : name,
                     "location" : location,
                     "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows] if windows else "No visibility" #[f"{w[0].strftime('%H:%M')} - {w[1].strftime('%H:%M')}" for w in windows] if windows else "No visibility"
-                }
+                })
 
     # put 1st object top
     ax.invert_yaxis()
@@ -125,7 +131,7 @@ def main():
     plt.savefig(img_name, dpi=100)
     plt.close()
 
-    print(json.dumps({"date": date_str, "image": img_name, "objects": output_data}))
+    print(json.dumps({"date": date_str, "image": img_name, "targets": output_data}))
 
 if __name__ == "__main__":
     main()

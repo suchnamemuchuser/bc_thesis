@@ -39,13 +39,55 @@ document.getElementById('plan-form').addEventListener('submit', function(e) {
             btn.disabled = false;
             btn.innerText = "Generate Plan";
 
-            if (data.error) {
+            if (data.error)
+            {
                 alert("Error: " + data.error);
-            } else {
+            }
+            else
+            {
                 document.getElementById('result-container').style.display = 'block';
                 if (document.getElementById('plan-graph')) {
                     document.getElementById('plan-graph').src = './' + data.image + '?t=' + new Date().getTime();
                 }
+
+
+
+
+
+
+
+
+                const payload = data.targets;
+
+                fetch('generate_chart.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                })
+                .then(response => {
+                    if (!response.ok) throw new Error("Chart generation failed");
+                    return response.blob(); // CRITICAL: Read the response as binary data, not JSON!
+                })
+                .then(imageBlob => {
+                    // Create a temporary local URL that points to the binary data in memory
+                    const imageObjectURL = URL.createObjectURL(imageBlob);
+                    
+                    // Assign it to your existing image tag
+                    document.getElementById('plan-graph').src = imageObjectURL;
+                    document.getElementById('result-container').style.display = 'block';
+                })
+                .catch(error => {
+                    console.error(error);
+                });
+
+
+
+
+
+
+
+
+
 
                 const list = document.getElementById('windows-list');
                 list.innerHTML = "";
@@ -53,8 +95,8 @@ document.getElementById('plan-form').addEventListener('submit', function(e) {
                 const baseDateObj = new Date(data.date + 'T00:00:00');
                 const baseUnixTime = baseDateObj.getTime() / 1000;
 
-                for (const [name, info] of Object.entries(data.objects)) {
-                    const windowsArray = Array.isArray(info.windows) ? info.windows : [info.windows];
+                data.targets.forEach(target => {
+                    const windowsArray = Array.isArray(target.windows) ? target.windows : [target.windows];
 
                     windowsArray.forEach(window => {
                         const li = document.createElement('li');
@@ -64,7 +106,7 @@ document.getElementById('plan-form').addEventListener('submit', function(e) {
                         if (endMin < startMin) endMin += 1440;
 
                         const sliderHTML = `
-                        <strong>${name}</strong> (${info.location}):
+                        <strong>${target.name}</strong> (${target.location}):
                         <div class="range_container">
                             <div class="sliders_control">
                                 <input class="fromSlider" type="range" value="${startMin}" min="${startMin}" max="${endMin}"/>
@@ -106,8 +148,8 @@ document.getElementById('plan-form').addEventListener('submit', function(e) {
                             const currentEndUnix = baseUnixTime + (parseInt(toSlider.value) * 60);
 
                             const payload = {
-                                object_name: name,
-                                location: info.location,
+                                object_name: target.name,
+                                location: target.location,
                                 rec_start_time: currentStartUnix,
                                 end_time: currentEndUnix
                             };
@@ -140,7 +182,7 @@ document.getElementById('plan-form').addEventListener('submit', function(e) {
                             });
                         });
                     });
-                }
+                });
             }
         })
         .catch(error => {

@@ -2,8 +2,8 @@
 
 header('Content-Type: application/json');
 
-$python = "bc_thesis_web/.venv/bin/python3";
-$script = "bc_thesis_web/python/gen_obs_json.py";
+$python = "../../bc_thesis_web/.venv/bin/python3";
+$script = "gen_obs_json.py";
 
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     exec($command, $output_array, $return_code);
 
-    file_put_contents('debug.txt', print_r(implode("\r\n", $output_array), true));
+    file_put_contents("{$_SERVER["DOCUMENT_ROOT"]}/logs/debug.txt", print_r(implode("\r\n", $output_array), true));
 
     $json_string = '';
     foreach ($output_array as $line) {
