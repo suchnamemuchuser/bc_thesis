@@ -60,3 +60,6 @@ astroEnv/
 
 # python generated images
 python/*.png
+*.png
+
+debug.txt
