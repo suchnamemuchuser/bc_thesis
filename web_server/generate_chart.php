@@ -36,6 +36,7 @@ $bgColor   = imagecolorallocate($image, 255, 255, 255);
 $textColor = imagecolorallocate($image, 50, 50, 50);
 $gridColor = imagecolorallocate($image, 230, 230, 230);
 $axisColor = imagecolorallocate($image, 150, 150, 150);
+$black     = imagecolorallocate($image, 0, 0, 0);
 
 imagefill($image, 0, 0, $bgColor);
 
