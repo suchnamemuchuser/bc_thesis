@@ -1,9 +1,7 @@
 <?php
 $clientVersion = isset($_GET['v']) ? (int)$_GET['v'] : 0;
 
-$dbPath = '../../plan.db';
-$pdo = new PDO('sqlite:' . $dbPath);
-$pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+require_once 'connect_db.php';
 
 $stmt = $pdo->query('SELECT version FROM db_metadata WHERE id = 1');
 $serverVersion = (int)$stmt->fetchColumn();
