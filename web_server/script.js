@@ -20,178 +20,189 @@ function addRow() {
     rowCount++;
 }
 
-
-
-document.getElementById('plan-form').addEventListener('submit', function(e) {
+document.getElementById('plan-form').addEventListener('submit', async function(e) {
     e.preventDefault();
+
     const btn = document.getElementById('submit-btn');
+    const resultContainer = document.getElementById('result-container');
+    const planGraph = document.getElementById('plan-graph');
+    const timelineGraph = document.getElementById('timeline-graph');
+    
+
     btn.disabled = true;
     btn.innerText = "Calculating...";
 
     const formData = new FormData(this);
 
-    fetch('process.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            btn.disabled = false;
-            btn.innerText = "Generate Plan";
+    const targetDate = formData.get('date') || '';
 
-            if (data.error)
-            {
-                alert("Error: " + data.error);
-            }
-            else
-            {
-                document.getElementById('result-container').style.display = 'block';
-                if (document.getElementById('plan-graph')) {
-                    document.getElementById('plan-graph').src = './' + data.image + '?t=' + new Date().getTime();
-                }
+    try {
+        const [processRes, planRes] = await Promise.all([
+            fetch('process.php', { method: 'POST', body: formData }),
+            fetch(`get_day_plan.php?date=${encodeURIComponent(targetDate)}`)
+        ]);
 
+        const processData = await processRes.json();
+        const planData = await planRes.json();
 
+        if (processData.error) throw new Error("Process Error: " + processData.error);
+        if (!planData.success) throw new Error("Plan Error: " + planData.error);
 
-
-
-
-
-
-                const payload = data.targets;
-
-                fetch('generate_chart.php', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+        const [chartRes, timelineRes] = await Promise.all([
+            fetch('generate_chart.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(processData.targets)
+            }),
+            fetch('generate_timeline.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    targetDate: targetDate, 
+                    plans: planData.data
                 })
-                .then(response => {
-                    if (!response.ok) throw new Error("Chart generation failed");
-                    return response.blob(); // CRITICAL: Read the response as binary data, not JSON!
-                })
-                .then(imageBlob => {
-                    // Create a temporary local URL that points to the binary data in memory
-                    const imageObjectURL = URL.createObjectURL(imageBlob);
-                    
-                    // Assign it to your existing image tag
-                    document.getElementById('plan-graph').src = imageObjectURL;
-                    document.getElementById('result-container').style.display = 'block';
-                })
-                .catch(error => {
-                    console.error(error);
-                });
+            })
+        ]);
 
+        if (!chartRes.ok) throw new Error("Chart generation failed");
+        if (!timelineRes.ok) throw new Error("Timeline generation failed");
 
+        const chartBlob = await chartRes.blob();
+        const timelineBlob = await timelineRes.blob();
 
+        if (planGraph) {
+            planGraph.src = URL.createObjectURL(chartBlob);
+        }
+        
+        if (timelineGraph) {
+            timelineGraph.src = URL.createObjectURL(timelineBlob);
+        }
 
+        const list = document.getElementById('windows-list');
+        list.innerHTML = "";
 
+        const baseDateObj = new Date(processData.date + 'T00:00:00');
+        const baseUnixTime = baseDateObj.getTime() / 1000;
 
+        processData.targets.forEach(target => {
+            const windowsArray = Array.isArray(target.windows) ? target.windows : [target.windows];
 
+            windowsArray.forEach(window => {
+                const li = document.createElement('li');
 
+                let startMin = timeToMinutes(window.start);
+                let endMin = timeToMinutes(window.end);
+                if (endMin < startMin) endMin += 1440;
 
-
-                const list = document.getElementById('windows-list');
-                list.innerHTML = "";
-
-                const baseDateObj = new Date(data.date + 'T00:00:00');
-                const baseUnixTime = baseDateObj.getTime() / 1000;
-
-                data.targets.forEach(target => {
-                    const windowsArray = Array.isArray(target.windows) ? target.windows : [target.windows];
-
-                    windowsArray.forEach(window => {
-                        const li = document.createElement('li');
-
-                        let startMin = timeToMinutes(window.start);
-                        let endMin = timeToMinutes(window.end);
-                        if (endMin < startMin) endMin += 1440;
-
-                        const sliderHTML = `
-                        <strong>${target.name}</strong> (${target.location}):
-                        <div class="range_container">
-                            <div class="sliders_control">
-                                <input class="fromSlider" type="range" value="${startMin}" min="${startMin}" max="${endMin}"/>
-                                <input class="toSlider" type="range" value="${endMin}" min="${startMin}" max="${endMin}"/>
-                            </div>
-                            <div class="form_control">
-                                <div class="form_control_container">
-                                    <div class="form_control_container__time">Start</div>
-                                    <input class="form_control_container__time__input fromInput" type="text" value="${window.start}"/>
-                                </div>
-                                <div class="form_control_container">
-                                    <div class="form_control_container__time">End</div>
-                                    <input class="form_control_container__time__input toInput" type="text" value="${window.end}"/>
-                                </div>
-                            </div>
+                const sliderHTML = `
+                <strong>${target.name}</strong> (${target.location}):
+                <div class="range_container">
+                    <div class="sliders_control">
+                        <input class="fromSlider" type="range" value="${startMin}" min="${startMin}" max="${endMin}"/>
+                        <input class="toSlider" type="range" value="${endMin}" min="${startMin}" max="${endMin}"/>
+                    </div>
+                    <div class="form_control">
+                        <div class="form_control_container">
+                            <div class="form_control_container__time">Start</div>
+                            <input class="form_control_container__time__input fromInput" type="text" value="${window.start}"/>
                         </div>
-                        <button class="save-btn">Plan</button>
-                        `;
+                        <div class="form_control_container">
+                            <div class="form_control_container__time">End</div>
+                            <input class="form_control_container__time__input toInput" type="text" value="${window.end}"/>
+                        </div>
+                    </div>
+                </div>
+                <button class="save-btn">Plan</button>
+                `;
 
-                        li.innerHTML = sliderHTML;
-                        list.appendChild(li);
+                li.innerHTML = sliderHTML;
+                list.appendChild(li);
 
-                        const fromSlider = li.querySelector('.fromSlider');
-                        const toSlider = li.querySelector('.toSlider');
-                        const fromInput = li.querySelector('.fromInput');
-                        const toInput = li.querySelector('.toInput');
-                        const saveBtn = li.querySelector('.save-btn');
+                const fromSlider = li.querySelector('.fromSlider');
+                const toSlider = li.querySelector('.toSlider');
+                const fromInput = li.querySelector('.fromInput');
+                const toInput = li.querySelector('.toInput');
+                const saveBtn = li.querySelector('.save-btn');
 
-                        fillSlider(fromSlider, toSlider, '#C6C6C6', '#25daa5', toSlider);
-                        setToggleAccessible(toSlider);
+                fillSlider(fromSlider, toSlider, '#C6C6C6', '#25daa5', toSlider);
+                setToggleAccessible(toSlider);
 
-                        fromSlider.oninput = () => controlFromSlider(fromSlider, toSlider, fromInput);
-                        toSlider.oninput = () => controlToSlider(fromSlider, toSlider, toInput);
-                        fromInput.onchange = () => controlFromInput(fromSlider, fromInput, toInput, toSlider);
-                        toInput.onchange = () => controlToInput(toSlider, fromInput, toInput, toSlider);
-                        
-                        saveBtn.addEventListener('click', () => {
-                            const currentStartUnix = baseUnixTime + (parseInt(fromSlider.value) * 60);
-                            const currentEndUnix = baseUnixTime + (parseInt(toSlider.value) * 60);
+                fromSlider.oninput = () => controlFromSlider(fromSlider, toSlider, fromInput);
+                toSlider.oninput = () => controlToSlider(fromSlider, toSlider, toInput);
+                fromInput.onchange = () => controlFromInput(fromSlider, fromInput, toInput, toSlider);
+                toInput.onchange = () => controlToInput(toSlider, fromInput, toInput, toSlider);
+                
+                saveBtn.addEventListener('click', () => {
+                    const currentStartUnix = baseUnixTime + (parseInt(fromSlider.value) * 60);
+                    const currentEndUnix = baseUnixTime + (parseInt(toSlider.value) * 60);
 
-                            const payload = {
-                                object_name: target.name,
-                                location: target.location,
-                                rec_start_time: currentStartUnix,
-                                end_time: currentEndUnix
-                            };
+                    const payload = {
+                        object_name: target.name,
+                        location: target.location,
+                        rec_start_time: currentStartUnix,
+                        end_time: currentEndUnix
+                    };
 
-                            saveBtn.innerText = "Saving...";
-                            saveBtn.disabled = true;
+                    saveBtn.innerText = "Saving...";
+                    saveBtn.disabled = true;
 
-                            fetch('plan_to_db.php', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(payload)
-                            })
-                            .then(res => res.json())
-                            .then(response => {
-                                if(response.success) {
-                                    saveBtn.innerText = "Saved!";
-                                    fromSlider.disabled = true;
-                                    toSlider.disabled = true;
-                                } else {
-                                    alert("Error: " + response.error);
-                                    saveBtn.innerText = "Plan";
-                                    saveBtn.disabled = false;
-                                }
-                            })
-                            .catch(err => {
-                                console.error("Network Error:", err);
-                                alert("Failed to save. Check console.");
-                                saveBtn.innerText = "Plan";
-                                saveBtn.disabled = false;
-                            });
-                        });
+                    fetch('plan_to_db.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(res => res.json())
+                    .then(response => {
+                        if(response.success) {
+                            saveBtn.innerText = "Saved!";
+                            fromSlider.disabled = true;
+                            toSlider.disabled = true;
+                        } else {
+                            alert("Error: " + response.error);
+                            saveBtn.innerText = "Plan";
+                            saveBtn.disabled = false;
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Network Error:", err);
+                        alert("Failed to save. Check console.");
+                        saveBtn.innerText = "Plan";
+                        saveBtn.disabled = false;
                     });
                 });
-            }
-        })
-        .catch(error => {
-            console.error('Fetch Error:', error);
-            btn.disabled = false;
-            btn.innerText = "Generate Plan";
-            alert("A system error occurred.");
+            });
         });
+
+        const planList = document.getElementById('plan-list');
+        planList.innerHTML = "";
+
+        planData.data.forEach(recording => {
+            const planLi = document.createElement('li');
+
+            const planHTML = `
+            Target: ${recording.object_name}<br>
+            OST - RST - ET<br>
+            ${recording.obs_start_time} - ${recording.rec_start_time} - ${recording.end_time}<br>
+            `;
+
+            planLi.innerHTML = planHTML;
+            planList.appendChild(planLi);
+        });
+
+        document.getElementById('result-container').style.display = 'block';
+    }
+    catch (error)
+    {
+        console.error(error);
+        alert(error.message);
+    }
+    finally
+    {
+        btn.disabled = false;
+        btn.innerText = "Generate visibility";
+    }
 });
+
 
 function controlFromSlider(fromSlider, toSlider, fromInput) {
     const [from, to] = getParsed(fromSlider, toSlider);
