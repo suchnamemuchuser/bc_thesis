@@ -90,7 +90,9 @@
     <div id="result-container" style="display: none">
         <h3>Visibility Windows</h3>
         <ul id="windows-list"></ul>
-        <img id="plan-graph" src="" alt="Observation Plan">
+        <img id="plan-graph" class="graph" src="" alt="Observation Plan">
+        <img id="timeline-graph" class="graph" src="" alt="Observation Plan">
+        <ul id="plan-list"></ul>
     </div>
 
     <script src="script.js"></script>
