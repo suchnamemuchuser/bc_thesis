@@ -25,28 +25,33 @@ try {
     $obsStartTime = $recStartTime - 600; 
 
     $checkSql = 'SELECT object_name, obs_start_time, end_time 
-                 FROM plan 
-                 WHERE obs_start_time <= :new_end 
-                 AND end_time >= :new_start';
-                 
+             FROM plan 
+             WHERE obs_start_time <= :new_end 
+             AND end_time >= :new_start
+             ORDER BY obs_start_time ASC';
+             
     $checkStmt = $pdo->prepare($checkSql);
     $checkStmt->bindValue(':new_end', $endTime);
     $checkStmt->bindValue(':new_start', $obsStartTime);
     $checkStmt->execute();
-    
-    $overlapCount = $checkStmt->fetchColumn();
 
     $overlaps = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
 
     if (!empty($overlaps)) {
         $conflictDetails = [];
         
+        $localTz = new DateTimeZone('Europe/Prague'); 
+        
         foreach ($overlaps as $row) {
-            $startStr = date('H:i', $row['obs_start_time']);
-            $endStr = date('H:i', $row['end_time']);
+            $dtStart = new DateTime("@" . $row['obs_start_time']);
+            $dtStart->setTimezone($localTz);
+            $startStr = $dtStart->format('H:i');
+            
+            $dtEnd = new DateTime("@" . $row['end_time']);
+            $dtEnd->setTimezone($localTz);
+            $endStr = $dtEnd->format('H:i');
             
             $name = $row['object_name'];
-            
             $conflictDetails[] = "{$name} ({$startStr} - {$endStr})";
         }
         
@@ -72,6 +77,6 @@ try {
 
 } catch (Exception $e) {
     http_response_code(500);
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }
 ?>
