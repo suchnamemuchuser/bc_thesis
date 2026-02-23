@@ -31,10 +31,8 @@ def main():
               (altaz.alt.value > ALT_MIN) & (altaz.alt.value < ALT_MAX)
 
     if np.any(visible):
-        # Find all indices where the sun is within your AZ/ALT limits
         indices = np.where(visible)[0]
         
-        # Get the start and end Time objects from our 'times' array
         start_rec = times[indices[0]].unix
         end_rec = times[indices[-1]].unix
 

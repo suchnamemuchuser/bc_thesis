@@ -30,7 +30,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $targets_string = implode(',', $final_targets);
 
-    // 1. Sanitize inputs for the shell
     $safe_date = escapeshellarg($date);
     $safe_targets = escapeshellarg($targets_string);
 
