@@ -4,7 +4,7 @@ header('Content-Type: application/json');
 
 require_once 'connect_db.php';
 
-$localTz = new DateTimeZone('Europe/Prague');
+require_once 'config.php';
 
 $todayObj = new DateTime('now', $localTz);
 

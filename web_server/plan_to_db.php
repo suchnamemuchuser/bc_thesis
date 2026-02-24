@@ -2,17 +2,18 @@
 
 header('Content-Type: application/json');
 
-try {
+require_once 'config.php';
+
+require_once 'connect_db.php';
+
+try 
+{
     $input = json_decode(file_get_contents('php://input'), true);
 
-    if (!$input) {
+    if (!$input)
+    {
         throw new Exception("No data received");
     }
-
-    $db = '../../plan.db';
-    $dsn = "sqlite:$db";
-    $pdo = new PDO($dsn);
-    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $objectName = $input['object_name'];
     $location = $input['location'];
@@ -37,12 +38,14 @@ try {
 
     $overlaps = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
 
-    if (!empty($overlaps)) {
+    if (!empty($overlaps)) 
+    {
         $conflictDetails = [];
         
         $localTz = new DateTimeZone('Europe/Prague'); 
         
-        foreach ($overlaps as $row) {
+        foreach ($overlaps as $row) 
+        {
             $dtStart = new DateTime("@" . $row['obs_start_time']);
             $dtStart->setTimezone($localTz);
             $startStr = $dtStart->format('H:i');
@@ -75,7 +78,9 @@ try {
 
     echo json_encode(['success' => true, 'id' => $pdo->lastInsertId()]);
 
-} catch (Exception $e) {
+}
+catch (Exception $e)
+{
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => $e->getMessage()]);
 }

@@ -1,6 +1,7 @@
 <?php
 
-$dbPath = __DIR__ . '/../../plan.db';
+require_once 'config.php';
+
 $pdo = new PDO('sqlite:' . $dbPath);
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 

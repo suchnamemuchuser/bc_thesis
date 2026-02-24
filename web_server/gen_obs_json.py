@@ -96,7 +96,7 @@ def main():
         if len(windows) > 1:
             first = windows[0]
             last = windows[-1]
-            # If visible at 00:00 and 23:59, merge them
+            # If visible at 00:00 and 23:59, merge
             if visible[0] and visible[-1]:
                 merged_start = last[0].strftime("%H:%M")
                 merged_end = first[1].strftime("%H:%M")
@@ -110,13 +110,13 @@ def main():
                 output_data.append({
                     "name" : name,
                     "location" : location,
-                    "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows] #[f"{w[0].strftime('%H:%M')} - {w[1].strftime('%H:%M')}" for w in windows]
+                    "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows]
                 })
         else:
             output_data.append({
                     "name" : name,
                     "location" : location,
-                    "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows] if windows else "No visibility" #[f"{w[0].strftime('%H:%M')} - {w[1].strftime('%H:%M')}" for w in windows] if windows else "No visibility"
+                    "windows" : [{"start": w[0].strftime('%H:%M'), "end": w[1].strftime('%H:%M')} for w in windows] if windows else "No visibility"
                 })
 
     # put 1st object top
