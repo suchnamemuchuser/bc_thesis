@@ -1,4 +1,3 @@
-CREATE TABLE sqlite_sequence(name,seq);
 CREATE TABLE plan(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   object_name TEXT NOT NULL,
