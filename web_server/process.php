@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST')
 
     exec($command, $output_array, $return_code);
 
-    if (count($output_array) != 1)
+    if (count($output_array) != 1 || $return_code != 0)
     {
         file_put_contents($process_log, print_r(implode("\r\n", $output_array)."\r\n", true));
     }
