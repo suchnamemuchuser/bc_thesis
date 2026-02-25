@@ -1,7 +1,7 @@
 <html>
     <head>
         <link rel="stylesheet" href="style.css">
-        <title>Welcome to your website!</title>
+        <title>RT2 control</title>
     </head>
     <body>
         <h1>Pulsar Observation Planner</h1>
