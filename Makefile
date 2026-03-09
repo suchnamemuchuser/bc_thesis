@@ -8,6 +8,7 @@ VIS_DB_FILE=$(DB_DIR)/visibility.db
 PHP_FILES=*.php
 OTHER_FILES=style.css script.js
 PY_FILES=gen_obs_json.py
+SHELL_FILES=daily_sun_plan.sh
 
 web:
 	mkdir -p $(WEB)
@@ -17,6 +18,11 @@ script:
 	mkdir -p $(WEB_BIN)
 	cd web_server && cp -f $(PY_FILES) $(WEB_BIN)
 	chmod +x $(WEB_BIN)/$(PY_FILES)
+
+sun:
+	mkdir -p $(WEB_BIN)
+	cd web_server && cp -f $(SHELL_FILES) $(WEB_BIN)
+	chmod +x $(WEB_BIN)/$(SHELL_FILES)
 
 db:
 	mkdir -p $(DB_DIR)
