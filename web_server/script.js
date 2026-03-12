@@ -293,13 +293,13 @@ async function refreshDayPlan(targetDate, planData = null) {
             nameTd.textContent = recording.object_name;
 
             const ostTd = document.createElement('td');
-            ostTd.textContent = recording.obs_start_time;
+            ostTd.textContent = recording.obs_start_date.concat(" ", recording.obs_start_time);
 
             const rstTd = document.createElement('td');
-            rstTd.textContent = recording.rec_start_time;
+            rstTd.textContent = recording.rec_start_date.concat(" ", recording.rec_start_time);
 
             const etTd = document.createElement('td');
-            etTd.textContent = recording.end_time;
+            etTd.textContent = recording.end_date.concat(" ", recording.end_time);
 
             const actionTd = document.createElement('td');
             const delBtn = document.createElement('button');

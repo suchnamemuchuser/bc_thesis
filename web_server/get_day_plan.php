@@ -12,24 +12,29 @@ $todayDate = $todayObj->format('Y-m-d');
 
 $date = isset($_GET['date']) ? $_GET['date'] : $todayDate;
 
+$givenDate = new DateTime($date, $localTz);
+$startDate = $givenDate->modify('-1 day')->format('Y-m-d');
+$endDate = $givenDate->modify('+2 days')->format('Y-m-d');
+
 try
 {
     $sql = "SELECT
                 id,
                 object_name,
                 strftime('%H:%M', obs_start_time, 'unixepoch', 'localtime') AS obs_start_time,
+                date(obs_start_time, 'unixepoch', 'localtime') AS obs_start_date,
                 strftime('%H:%M', rec_start_time, 'unixepoch', 'localtime') AS rec_start_time,
+                date(rec_start_time, 'unixepoch', 'localtime') AS rec_start_date,
                 strftime('%H:%M', end_time, 'unixepoch', 'localtime') AS end_time,
-                date(obs_start_time, 'unixepoch', 'localtime') AS start_date,
                 date(end_time, 'unixepoch', 'localtime') AS end_date
             FROM plan
-            WHERE date(obs_start_time, 'unixepoch', 'localtime') = :date1
-            OR date(end_time, 'unixepoch', 'localtime') = :date2
+            WHERE date(obs_start_time, 'unixepoch', 'localtime') BETWEEN :startDate AND :endDate
+            OR date(end_time, 'unixepoch', 'localtime') BETWEEN :startDate AND :endDate
             ORDER BY obs_start_time ASC";
 
     $stmt = $pdo->prepare($sql);
-    $stmt->bindValue(':date1', $date, PDO::PARAM_STR);
-    $stmt->bindValue(':date2', $date, PDO::PARAM_STR);
+    $stmt->bindValue(':startDate', $startDate, PDO::PARAM_STR);
+    $stmt->bindValue(':endDate', $endDate, PDO::PARAM_STR);
     $stmt->execute();
     
     $plans = $stmt->fetchAll(PDO::FETCH_ASSOC);

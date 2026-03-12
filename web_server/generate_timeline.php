@@ -9,7 +9,7 @@ if (!is_array($data)) {
 }
 
 $leftMargin = 150;
-$timelineWidth = 24 * 60 + 1;
+$timelineWidth = 3 * 24 * 20 + 1;
 $width = $leftMargin + $timelineWidth;
 
 $rowHeight = 60;
@@ -39,17 +39,16 @@ imagefilledrectangle($image, 0, 0, $width, $height, $bgColor);
 $chartBottom = $rowHeight;
 imageline($image, $leftMargin, $chartBottom, $width, $chartBottom, $axisColor);
 
-for ($hour = 0; $hour <= 24; $hour += 2) {
-    $x = $leftMargin + ($hour * 60);
+for ($hour = 0; $hour <= 72; $hour += 2) {
+    $x = $leftMargin + ($hour * 20);
     
-    if ($hour < 24) {
+    if ($hour < 72) {
         imageline($image, $x, 0, $x, $chartBottom, $gridColor);
     }
     
     imageline($image, $x, $chartBottom, $x, $chartBottom + 5, $axisColor);
 
     $timeLabel = sprintf('%02d:00', $hour % 24);
-    if ($hour == 24) $timeLabel = "24:00"; 
     
     $textWidth = strlen($timeLabel) * 6;
     imagestring($image, 3, $x - ($textWidth / 2), $chartBottom + 10, $timeLabel, $textColor);
@@ -66,21 +65,21 @@ foreach ($data as $index => $row) {
     list($startH, $startM) = explode(':', $row['obs_start_time']);
     list($endH, $endM) = explode(':', $row['end_time']);
 
-    $startMinsRaw = ($startH * 60) + $startM;
-    if ($row['start_date'] < $targetDate) {
-        $startMinsRaw -= 1440;
-    } elseif ($row['start_date'] > $targetDate) {
-        $startMinsRaw += 1440;
+    $startMinsRaw = ($startH * 20) + ($startM / 3);
+    if ($row['obs_start_date'] == $targetDate) {
+        $startMinsRaw += 480;
+    } elseif ($row['obs_start_date'] > $targetDate) {
+        $startMinsRaw += 960;
     }
 
-    $endMinsRaw = ($endH * 60) + $endM;
-    if ($row['end_date'] > $targetDate) {
-        $endMinsRaw += 1440;
-    } elseif ($row['end_date'] < $targetDate) {
-        $endMinsRaw -= 1440;
+    $endMinsRaw = ($endH * 20) + ($endM / 3);
+    if ($row['end_date'] == $targetDate) {
+        $endMinsRaw += 480;
+    } elseif ($row['end_date'] > $targetDate) {
+        $endMinsRaw += 960;
     }
 
-    $recMinsRaw = $startMinsRaw + 10;
+    $recMinsRaw = $startMinsRaw + 3;
 
     $drawStartMins = max(0, min(1440, $startMinsRaw));
     $drawRecMins   = max(0, min(1440, $recMinsRaw));
@@ -93,7 +92,7 @@ foreach ($data as $index => $row) {
     if ($drawRecX > $drawStartX) {
         imagefilledrectangle($image, $drawStartX, $barTop, $drawRecX, $barBottom, $barColor);
         
-        for ($x = $drawStartX + 3; $x < $drawRecX; $x += 4) {
+        for ($x = $drawStartX; $x < $drawRecX; $x += 2) {
             imageline($image, $x, $barTop, $x, $barBottom, $stripeColor);
         }
         
@@ -105,7 +104,7 @@ foreach ($data as $index => $row) {
         imagerectangle($image, $drawRecX, $barTop, $drawEndX, $barBottom, $black);
     }
 
-    $name = $row['object_name'];
+    $name = $row['object_name'].$row['end_date'];
     $textWidth = strlen($name) * 6;
     
     $totalBlockWidth = $drawEndX - $drawStartX;
