@@ -21,12 +21,9 @@ try
     $sql = "SELECT
                 id,
                 object_name,
-                strftime('%H:%M', obs_start_time, 'unixepoch', 'localtime') AS obs_start_time,
-                date(obs_start_time, 'unixepoch', 'localtime') AS obs_start_date,
-                strftime('%H:%M', rec_start_time, 'unixepoch', 'localtime') AS rec_start_time,
-                date(rec_start_time, 'unixepoch', 'localtime') AS rec_start_date,
-                strftime('%H:%M', end_time, 'unixepoch', 'localtime') AS end_time,
-                date(end_time, 'unixepoch', 'localtime') AS end_date
+                obs_start_time,
+                rec_start_time,
+                end_time
             FROM plan
             WHERE date(obs_start_time, 'unixepoch', 'localtime') BETWEEN :startDate AND :endDate
             OR date(end_time, 'unixepoch', 'localtime') BETWEEN :startDate AND :endDate

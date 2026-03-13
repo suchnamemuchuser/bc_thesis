@@ -293,20 +293,28 @@ async function refreshDayPlan(targetDate, planData = null) {
             const nameTd = document.createElement('td');
             nameTd.textContent = recording.object_name;
 
+            const localeOptions = { 
+                year: 'numeric', 
+                month: 'numeric', 
+                day: 'numeric', 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            };
+
             const ostTd = document.createElement('td');
-            ostTd.textContent = recording.obs_start_date.concat(" ", recording.obs_start_time);
+            ostTd.textContent = new Date(recording.obs_start_time * 1000).toLocaleString("cs-CZ", localeOptions);
 
             const rstTd = document.createElement('td');
-            rstTd.textContent = recording.rec_start_date.concat(" ", recording.rec_start_time);
+            rstTd.textContent = new Date(recording.rec_start_time * 1000).toLocaleString("cs-CZ", localeOptions);
 
             const etTd = document.createElement('td');
-            etTd.textContent = recording.end_date.concat(" ", recording.end_time);
+            etTd.textContent = new Date(recording.end_time * 1000).toLocaleString("cs-CZ", localeOptions);
 
             const actionTd = document.createElement('td');
             const delBtn = document.createElement('button');
             delBtn.textContent = 'Delete';
             delBtn.addEventListener('click', async () => {
-                if (!confirm(`Delete plan for ${recording.object_name} at ${recording.rec_start_time}?`)) return;
+                if (!confirm(`Delete plan for ${recording.object_name} at ${new Date(recording.rec_start_time * 1000).toLocaleString()}?`)) return;
                 delBtn.disabled = true;
                 try {
                     const res = await fetch('delete_plan.php', {

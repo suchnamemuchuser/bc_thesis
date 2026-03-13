@@ -1,4 +1,6 @@
 <?php
+require_once 'config.php';
+
 $payload = json_decode(file_get_contents('php://input'), true);
 $targetDate = $payload['targetDate'];
 $data = $payload['plans'];
@@ -7,6 +9,29 @@ if (!is_array($data)) {
     http_response_code(400);
     die("Invalid JSON payload");
 }
+
+// Helper function to convert Unix timestamp (UTC) to local DateTime
+function utcToLocal($unixTimestamp, $localTz) {
+    $dt = new DateTime('@' . $unixTimestamp, new DateTimeZone('UTC'));
+    $dt->setTimezone($localTz);
+    return $dt;
+}
+
+// Parse target date and create 3-day window
+$targetDt = DateTime::createFromFormat('Y-m-d', $targetDate, $localTz);
+if (!$targetDt) {
+    http_response_code(400);
+    die("Invalid target date format");
+}
+
+// Window: day before, target day, day after (72 hours starting at 00:00 local time of day before)
+$windowStart = clone $targetDt;
+$windowStart->modify('-1 day');
+$windowStart->setTime(0, 0, 0);
+
+$windowEnd = clone $windowStart;
+$windowEnd->modify('+3 days');
+$windowEnd->setTime(0, 0, 0);
 
 $leftMargin = 150;
 $timelineWidth = 3 * 24 * 20 + 1;
@@ -33,6 +58,8 @@ $gridColor = imagecolorallocate($image, 230, 230, 230);
 $axisColor = imagecolorallocate($image, 150, 150, 150);
 $stripeColor = imagecolorallocate($image, 255, 255, 255);
 $black     = imagecolorallocate($image, 0, 0, 0);
+$red       = imagecolorallocate($image, 255, 0, 0);
+$lightGrey = imagecolorallocate($image, 200, 200, 200);
 
 imagefilledrectangle($image, 0, 0, $width, $height, $bgColor);
 
@@ -56,57 +83,63 @@ for ($hour = 0; $hour <= 72; $hour += 2) {
 
 imagestring($image, 5, 15, ($rowHeight / 2) - 8, "Daily Plan", $textColor);
 
+// Calculate pixels per second for the 72-hour timeline
+$pixelsPerSecond = $timelineWidth / (3 * 24 * 3600);
+
+// Draw current time indicator if it falls within the window
+$currentTime = new DateTime('now', $localTz);
+
 $barTop = 10;
 $barBottom = $rowHeight - 10;
 
-foreach ($data as $index => $row) {
-    $barColor = imagecolorallocate($image, ...$barColors[$index % $barColorsCount]);
+// Filter and draw events
+$eventIndex = 0;
+foreach ($data as $row) {
+    $obsStartTime = utcToLocal($row['obs_start_time'], $localTz);
+    $recStartTime = utcToLocal($row['rec_start_time'], $localTz);
+    $endTime = utcToLocal($row['end_time'], $localTz);
     
-    list($startH, $startM) = explode(':', $row['obs_start_time']);
-    list($endH, $endM) = explode(':', $row['end_time']);
-
-    $startMinsRaw = ($startH * 20) + ($startM / 3);
-    if ($row['obs_start_date'] == $targetDate) {
-        $startMinsRaw += 480;
-    } elseif ($row['obs_start_date'] > $targetDate) {
-        $startMinsRaw += 960;
+    // Check if event overlaps with the 3-day window
+    if ($endTime < $windowStart || $obsStartTime >= $windowEnd) {
+        continue;
     }
-
-    $endMinsRaw = ($endH * 20) + ($endM / 3);
-    if ($row['end_date'] == $targetDate) {
-        $endMinsRaw += 480;
-    } elseif ($row['end_date'] > $targetDate) {
-        $endMinsRaw += 960;
+    
+    // Calculate seconds from window start for each timestamp
+    $obsStartSecOffset = $obsStartTime->getTimestamp() - $windowStart->getTimestamp();
+    $recStartSecOffset = $recStartTime->getTimestamp() - $windowStart->getTimestamp();
+    $endSecOffset = $endTime->getTimestamp() - $windowStart->getTimestamp();
+    
+    // Clamp to visible window and convert to pixel positions
+    $drawStartX = $leftMargin + max(0, $obsStartSecOffset * $pixelsPerSecond);
+    $drawEndX = $leftMargin + min($timelineWidth, $endSecOffset * $pixelsPerSecond);
+    $drawRecX = $leftMargin + max(0, min($timelineWidth, $recStartSecOffset * $pixelsPerSecond));
+    
+    // Only draw if visible
+    if ($drawEndX <= $drawStartX) {
+        continue;
     }
-
-    $recMinsRaw = $startMinsRaw + 3;
-
-    $drawStartMins = max(0, min(1440, $startMinsRaw));
-    $drawRecMins   = max(0, min(1440, $recMinsRaw));
-    $drawEndMins   = max(0, min(1440, $endMinsRaw));
-
-    $drawStartX = $leftMargin + $drawStartMins;
-    $drawRecX   = $leftMargin + $drawRecMins;
-    $drawEndX   = $leftMargin + $drawEndMins;
-
-    if ($drawRecX > $drawStartX) {
-        imagefilledrectangle($image, $drawStartX, $barTop, $drawRecX, $barBottom, $barColor);
-        
-        for ($x = $drawStartX; $x < $drawRecX; $x += 2) {
-            imageline($image, $x, $barTop, $x, $barBottom, $stripeColor);
-        }
-        
-        imagerectangle($image, $drawStartX, $barTop, $drawRecX, $barBottom, $black);
+    
+    // Get color for this event
+    $barColor = imagecolorallocate($image, ...$barColors[$eventIndex % $barColorsCount]);
+    $eventIndex++;
+    
+    // Use light grey if event has ended
+    if ($endTime <= $currentTime) {
+        $barColor = $lightGrey;
     }
-
-    if ($drawEndX > $drawRecX) {
-        imagefilledrectangle($image, $drawRecX, $barTop, $drawEndX, $barBottom, $barColor);
-        imagerectangle($image, $drawRecX, $barTop, $drawEndX, $barBottom, $black);
+    
+    // Draw solid rectangle from obs_start to end
+    imagefilledrectangle($image, (int)$drawStartX, $barTop, (int)$drawEndX, $barBottom, $barColor);
+    imagerectangle($image, (int)$drawStartX, $barTop, (int)$drawEndX, $barBottom, $black);
+    
+    // Draw vertical line at recording start time
+    if ($drawRecX >= $leftMargin && $drawRecX <= $leftMargin + $timelineWidth) {
+        imageline($image, (int)$drawRecX, $barTop, (int)$drawRecX, $barBottom, $black);
     }
-
-    $name = $row['object_name'].$row['end_date'];
+    
+    // Draw label
+    $name = $row['object_name'];
     $textWidth = strlen($name) * 6;
-    
     $totalBlockWidth = $drawEndX - $drawStartX;
     
     if ($totalBlockWidth > $textWidth + 10) {
@@ -115,7 +148,13 @@ foreach ($data as $index => $row) {
         $textX = $drawStartX + 5;
     }
     
-    imagestring($image, 3, $textX, $barTop + 13, $name, $textColor);
+    imagestring($image, 3, (int)$textX, $barTop + 13, $name, $textColor);
+}
+
+if ($currentTime >= $windowStart && $currentTime < $windowEnd) {
+    $currentSecOffset = $currentTime->getTimestamp() - $windowStart->getTimestamp();
+    $currentX = $leftMargin + ($currentSecOffset * $pixelsPerSecond);
+    imageline($image, (int)$currentX, 0, (int)$currentX, $height, $red);
 }
 
 header('Content-Type: image/png');
