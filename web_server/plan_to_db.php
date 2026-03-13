@@ -25,6 +25,11 @@ try
     
     $obsStartTime = $recStartTime - 600; 
 
+    if ($obsStartTime < time() + 5*60)
+    {
+        throw new Exception("Must plan atleast 15 minutes in the future!");
+    }
+
     $checkSql = 'SELECT object_name, obs_start_time, end_time 
              FROM plan 
              WHERE obs_start_time <= :new_end 
