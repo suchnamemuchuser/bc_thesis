@@ -11,34 +11,19 @@ if ($clientVersion === $serverVersion) {
     exit;
 }
 
-header('Content-Type: text/plain');
-header('X-Database-Version: ' . $serverVersion);
-
-
 $threshold = time() - 24 * 60 * 60;
-
-
-$response = "BEGIN TRANSACTION;\n";
-$response .= "DELETE FROM recording_plan;\n";
 
 $stmt = $pdo->query('SELECT id, object_name, is_interstellar, obs_start_time, rec_start_time, end_time FROM plan WHERE end_time > :threshold');
 $stmt->bindValue(':threshold', $threshold, PDO::PARAM_INT);
-$stmt->execute();
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
-    $id = (int)$row['id'];
-    $objName = $pdo->quote($row['object_name']);
-    $isInterstellar = (int)$row['is_interstellar'];
-    $obsStartTime = (int)$row['obs_start_time'];
-    $recStartTime = (int)$row['rec_start_time'];
-    $endTime = (int)$row['end_time'];
+$response = [
+    "status" => "update",
+    "version" => $serverVersion,
+    "data" => $rows
+];
 
-    $response .= "INSERT INTO recording_plan (id, start_time, duration, channel) ";
-    $response .= "VALUES ($id, $objName, $isInterstellar, $obsStartTime, $recStartTime, $endTime);\n";
-}
+header('Content-Type: application/json');
+echo json_encode($response);
 
-$response .= "UPDATE db_metadata SET version = $serverVersion WHERE id = 1;\n";
-$response .= "COMMIT;";
-
-echo $response;
 ?>
