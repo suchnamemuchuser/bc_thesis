@@ -18,7 +18,6 @@ $stmt->bindValue(':threshold', $threshold, PDO::PARAM_INT);
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $response = [
-    "status" => "update",
     "version" => $serverVersion,
     "data" => $rows
 ];
