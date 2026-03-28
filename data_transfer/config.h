@@ -5,6 +5,7 @@ typedef struct {
 } Device;
 
 typedef struct {
+    int bufferSize;
     char* webURL;
     char* database;
     char* dataRootDir;

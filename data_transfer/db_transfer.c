@@ -148,7 +148,7 @@ int checkAndUpdateDb(char* dbFileName, char* baseURL)
         curl_global_cleanup();
 }
 
-DbItem getDbItem(char* dbFileName) {
+DbItem getDbItem(char* dbFileName, int timestamp) {
     sqlite3 *db;
     sqlite3_stmt *res;
     DbItem item = {0}; // Initialize with zeros (id = 0 often indicates "not found")
@@ -161,12 +161,16 @@ DbItem getDbItem(char* dbFileName) {
     }
 
     // 2. Prepare SQL Query
+    // Updated SQL string
     const char *sql = "SELECT id, object_name, is_interstellar, obs_start_time, "
-                      "rec_start_time, end_time FROM plan "
-                      "WHERE ABS(obs_start_time - ?) <= 300 "
-                      "OR ABS(rec_start_time - ?) <= 300 "
-                      "OR ABS(end_time - ?) <= 300 "
-                      "ORDER BY obs_start_time ASC LIMIT 1;";
+                    "rec_start_time, end_time FROM plan "
+                    "WHERE (obs_start_time >= ? AND obs_start_time <= ? + 300) "
+                    "OR (rec_start_time >= ? AND rec_start_time <= ? + 300) "
+                    "OR (end_time >= ? AND end_time <= ? + 300) "
+                    "ORDER BY obs_start_time ASC LIMIT 1;";
+
+
+
 
     if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) {
         fprintf(stderr, "Failed to fetch data: %s\n", sqlite3_errmsg(db));
@@ -174,11 +178,12 @@ DbItem getDbItem(char* dbFileName) {
         return item;
     }
 
-    // 3. Bind the current time to the three '?' placeholders
-    int now = (int)time(NULL);
-    sqlite3_bind_int(res, 1, now);
-    sqlite3_bind_int(res, 2, now);
-    sqlite3_bind_int(res, 3, now);
+    sqlite3_bind_int(res, 1, timestamp);
+    sqlite3_bind_int(res, 2, timestamp);
+    sqlite3_bind_int(res, 3, timestamp);
+    sqlite3_bind_int(res, 4, timestamp);
+    sqlite3_bind_int(res, 5, timestamp);
+    sqlite3_bind_int(res, 6, timestamp);
 
     // 4. Execute and map to struct
     int step = sqlite3_step(res);

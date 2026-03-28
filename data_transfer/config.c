@@ -23,6 +23,9 @@ AppConfig* loadConfig(const char *filename) {
 
     AppConfig *config = malloc(sizeof(AppConfig));
 
+    cJSON *bufsiz = cJSON_GetObjectItemCaseSensitive(json, "buffer_size");
+    config->bufferSize = cJSON_IsNumber(bufsiz) ? bufsiz->valueint : 0;
+
     // 1. Get URL
     cJSON *url = cJSON_GetObjectItemCaseSensitive(json, "web_url");
     config->webURL = cJSON_IsString(url) ? strdup(url->valuestring) : NULL;
@@ -66,6 +69,7 @@ int printConfig(AppConfig* config) {
     }
 
     printf("App configuration:\n");
+    printf("Buffer size: %d\n", config->bufferSize);
     printf("Web URL: %s\n", config->webURL ? config->webURL : "NULL");
     printf("Database: %s\n", config->database ? config->database : "NULL");
     printf("Data Root Dir: %s\n", config->dataRootDir ? config->dataRootDir : "NULL");
