@@ -1,0 +1,27 @@
+#ifndef SERVER_H
+#define SERVER_H
+
+#include "CircularBuffer.h"
+#include "db_transfer.h"
+#include "config.h"
+#include <pthread.h>
+
+typedef struct {
+    circularBuffer buffer;
+
+    // ALL ACCESS TO BUFFERSESSION UNDER MUTEX!
+    pthread_mutex_t buffer_lock;
+
+    pthread_cond_t data_available;
+
+    Device deviceInfo;
+
+    DbItem recordingInfo;
+
+} BufferSession;
+
+void* bufferProducerThread(void* arg);
+
+void* bufferFileConsumerThread(void* arg);
+
+#endif //SERVER_H
