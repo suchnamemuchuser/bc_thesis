@@ -1,34 +1,14 @@
-#include "config.h"
-#include "db_transfer.h"
-#include "CircularBuffer.h"
-#include <pthread.h>
+#include "server.h"
 
-typedef struct {
-    circularBuffer buffer;
-
-    // ALL ACCESS TO BUFFERSESSION UNDER MUTEX!
-    pthread_mutex_t buffer_lock;
-
-    pthread_cond_t data_available;
-
-    Device deviceInfo;
-
-    DbItem recordingInfo;
-
-} BufferSession;
+AppConfig* appConfig;
 
 int main(){    
     DbItem currentRecording;
-
-    AppConfig* appConfig;
 
     appConfig = loadConfig("serverconfig.json");
 
     printConfig(appConfig);
 
-    // load config
-
-    // start all r+w
 
     BufferSession* bufferSessions = malloc(sizeof(BufferSession) * appConfig->deviceCount);
 
@@ -40,10 +20,68 @@ int main(){
         pthread_mutex_init(&bufferSessions[i].buffer_lock, NULL);
         pthread_cond_init(&bufferSessions[i].data_available, NULL);
 
+        pthread_t producer_tid;
+        if (pthread_create(&producer_tid, NULL, bufferProducerThread, (void*)&bufferSessions[i]) != 0)
+        {
+            fprintf(stderr, "Failed to create producer thread.\n");
+            return 1;
+        }
+
+        pthread_t fileConsumer_tid;
+        if (pthread_create(&producer_tid, NULL, bufferFileConsumerThread, (void*)&bufferSessions[i]) != 0)
+        {
+            fprintf(stderr, "Failed to create file consumer thread.\n");
+            return 1;
+        }
+
         printf("Init CB\n");
         printf("Add to buffer array\n");
         printf("Start writer and readers\n");
     }
+
+    // time_t now = time(NULL);
+
+    // DbItem testItem = {
+    //     .id = 1,
+    //     .object_name = "PSR1999+TEST",
+    //     .is_interstellar = 1,
+    //     .obs_start_time = (int)now,
+    //     .rec_start_time = (int)(now + 30),
+    //     .end_time = (int)(now + 30)
+    // };
+
+    // printf("Starting test!\n");
+
+    // printf("Starting observation of %s\n", testItem.object_name);
+
+    // sleep(30);
+
+    // printf("Starting recording of %s\n", testItem.object_name);
+
+    // for (int i = 0 ; i < appConfig->deviceCount ; i++)
+    // {
+    //     pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+    //     bufferSessions[i].recordingInfo = testItem;
+    //     bufferSessions[i].buffer.recordingActive = true;
+    //     pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
+    // }
+
+    // sleep(30);
+
+    // printf("Ending recording.\n");
+
+    // for (int i = 0 ; i < appConfig->deviceCount ; i++)
+    // {
+    //     pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+    //     bufferSessions[i].buffer.recordingActive = false;
+    //     pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
+    // }
+
+    // sleep(60);
+
+    // printf("Ending test.\n");
+
+    // exit(0);
 
     while(1)
     {
