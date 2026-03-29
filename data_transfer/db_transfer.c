@@ -164,9 +164,9 @@ DbItem getDbItem(char* dbFileName, int timestamp) {
     // Updated SQL string
     const char *sql = "SELECT id, object_name, is_interstellar, obs_start_time, "
                     "rec_start_time, end_time FROM plan "
-                    "WHERE (obs_start_time >= ? AND obs_start_time <= ? + 300) "
-                    "OR (rec_start_time >= ? AND rec_start_time <= ? + 300) "
-                    "OR (end_time >= ? AND end_time <= ? + 300) "
+                    "WHERE (obs_start_time > ? + 10 AND obs_start_time < ? + 300) "
+                    "OR (rec_start_time > ? + 10 AND rec_start_time < ? + 300) "
+                    "OR (end_time > ? + 10 AND end_time < ? + 300) "
                     "ORDER BY obs_start_time ASC LIMIT 1;";
 
 
