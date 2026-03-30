@@ -1,6 +1,8 @@
 #ifndef SERVER_PRODUCER_C
 #define SERVER_PRODUCER_C
 
+#define _DEFAULT_SOURCE // fix usleep warning
+
 #include "server.h"
 
 #define PROD_BUF_SIZ 1000
