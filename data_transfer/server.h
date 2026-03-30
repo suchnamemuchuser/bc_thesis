@@ -24,4 +24,6 @@ void* bufferProducerThread(void* arg);
 
 void* bufferFileConsumerThread(void* arg);
 
+void* bufferNetworkConsumerThread(void* arg);
+
 #endif //SERVER_H

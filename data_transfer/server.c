@@ -20,23 +20,29 @@ int main(){
         pthread_mutex_init(&bufferSessions[i].buffer_lock, NULL);
         pthread_cond_init(&bufferSessions[i].data_available, NULL);
 
+        printf("Starting producer for buffer %d.\n", i+1);
         pthread_t producer_tid;
         if (pthread_create(&producer_tid, NULL, bufferProducerThread, (void*)&bufferSessions[i]) != 0)
         {
             fprintf(stderr, "Failed to create producer thread.\n");
             return 1;
         }
-
+        
+        printf("Starting file consumer for buffer %d.\n", i+1);
         pthread_t fileConsumer_tid;
-        if (pthread_create(&producer_tid, NULL, bufferFileConsumerThread, (void*)&bufferSessions[i]) != 0)
+        if (pthread_create(&fileConsumer_tid, NULL, bufferFileConsumerThread, (void*)&bufferSessions[i]) != 0)
         {
             fprintf(stderr, "Failed to create file consumer thread.\n");
             return 1;
         }
 
-        printf("Init CB\n");
-        printf("Add to buffer array\n");
-        printf("Start writer and readers\n");
+        printf("Starting network consumer for buffer %d.\n", i+1);
+        pthread_t networkConsumer_tid;
+        if (pthread_create(&networkConsumer_tid, NULL, bufferNetworkConsumerThread, (void*)&bufferSessions[i]) != 0)
+        {
+            fprintf(stderr, "Failed to create network consumer thread.\n");
+            return 1;
+        }
     }
 
     // time_t now = time(NULL);
