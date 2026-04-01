@@ -47,7 +47,7 @@ void* bufferFileConsumerThread(void* arg)
 
         if (!threadRecordingActive && !bufferRecordingActive)  // no recording - sleep
         {
-            sleep(5);
+            usleep(10000);
         }
         else if (!threadRecordingActive && bufferRecordingActive) // start recording - open file
         {
@@ -83,9 +83,10 @@ void* bufferFileConsumerThread(void* arg)
         {
             pthread_mutex_lock(&bufferSession->buffer_lock);
             int availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
-            if (availableData == 0)
+            while (availableData < readLen && bufferSession->buffer.recordingActive)
             {
                 pthread_cond_wait(&bufferSession->data_available, &bufferSession->buffer_lock);
+                availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
             }
 
             readLen = circularBufferReadData(&bufferSession->buffer, consumerId, readLen, &readPtr);

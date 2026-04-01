@@ -149,9 +149,10 @@ void* bufferNetworkConsumerThread(void* arg)
         {
             pthread_mutex_lock(&bufferSession->buffer_lock);
             int availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
-            if (availableData == 0)
+            while (availableData < readLen && bufferSession->buffer.recordingActive)
             {
                 pthread_cond_wait(&bufferSession->data_available, &bufferSession->buffer_lock);
+                availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
             }
 
             header.type = PACKET_TYPE_DATA;
