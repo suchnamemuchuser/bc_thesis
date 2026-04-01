@@ -6,6 +6,8 @@
 #include "config.h"
 #include <pthread.h>
 
+#define MILLISECOND 1000
+
 typedef struct {
     circularBuffer buffer;
 
