@@ -25,7 +25,7 @@ int main(){
         if (pthread_create(&producer_tid, NULL, bufferProducerThread, (void*)&bufferSessions[i]) != 0)
         {
             fprintf(stderr, "Failed to create producer thread.\n");
-            return 1;
+            exit(1);
         }
         
         printf("Starting file consumer for buffer %d.\n", i+1);
@@ -33,7 +33,7 @@ int main(){
         if (pthread_create(&fileConsumer_tid, NULL, bufferFileConsumerThread, (void*)&bufferSessions[i]) != 0)
         {
             fprintf(stderr, "Failed to create file consumer thread.\n");
-            return 1;
+            exit(1);
         }
 
         printf("Starting network consumer for buffer %d.\n", i+1);
@@ -41,7 +41,7 @@ int main(){
         if (pthread_create(&networkConsumer_tid, NULL, bufferNetworkConsumerThread, (void*)&bufferSessions[i]) != 0)
         {
             fprintf(stderr, "Failed to create network consumer thread.\n");
-            return 1;
+            exit(1);
         }
     }
 
@@ -89,6 +89,8 @@ int main(){
 
     // exit(0);
 
+    DbItem emptyItem = {0};
+
     while(1)
     {
         checkAndUpdateDb(appConfig->database, appConfig->webURL);
@@ -122,6 +124,7 @@ int main(){
         }
         else if (nextRecording.rec_start_time > curTime) // start recording - update recording info and set flag
         {
+            if (currentRecording.id == 0) continue;
             printf("Sleeping for %d\n", nextRecording.rec_start_time - curTime);
             sleep(nextRecording.rec_start_time - curTime);
 
@@ -144,9 +147,12 @@ int main(){
 
             printf("Ending recording of %s\n", currentRecording.object_name);
 
+            currentRecording = emptyItem;
+
             for (int i = 0 ; i < appConfig->deviceCount ; i++)
             {
                 pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+                bufferSessions[i].recordingInfo = emptyItem;
                 bufferSessions[i].buffer.recordingActive = false;
                 pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
             }
