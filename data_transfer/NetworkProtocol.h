@@ -12,6 +12,8 @@
 #define PACKET_TYPE_END      0x03
 #define PACKET_TYPE_INACTIVE 0x04
 
+#define DATA_PACKET_DEFAULT_SIZE 15000
+
 // no padding
 #pragma pack(push, 1)
 
