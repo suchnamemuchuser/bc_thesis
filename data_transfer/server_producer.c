@@ -5,7 +5,7 @@
 
 #include "server.h"
 
-#define PROD_BUF_SIZ 1000
+#define PROD_BUF_SIZ 900
 
 void* bufferProducerThread(void* arg)
 {
@@ -33,8 +33,6 @@ void* bufferProducerThread(void* arg)
         memcpy(dataBuffer + i, pattern, PROD_BUF_SIZ - i);
     }
 
-    //printf("dataBuffer: %.1000s\n", dataBuffer);
-
 
     while(true)
     {
@@ -53,7 +51,6 @@ void* bufferProducerThread(void* arg)
                 circularBufferConfirmWrite(&bufferSession->buffer, PROD_BUF_SIZ);
                 pthread_cond_broadcast(&bufferSession->data_available);
             }
-            // TODO: print or something for data thrown away
         }
         else
         {
