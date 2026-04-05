@@ -20,7 +20,7 @@ typedef struct {
 
 int checkAndUpdateDb(char* dbFileName, char* baseURL);
 
-DbItem getDbItem(char* dbFileName, int timestamp);
+DbItem getNextDbItem(char* dbFileName, int timestamp);
 
 void printDbItem(DbItem item);
 

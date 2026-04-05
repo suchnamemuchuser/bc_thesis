@@ -99,7 +99,7 @@ int main(){
 
         int curTime = (int)time(NULL);
 
-        DbItem nextRecording = getDbItem(appConfig->database, curTime);
+        DbItem nextRecording = getNextDbItem(appConfig->database, curTime);
 
         if (nextRecording.id == -1)
         {
