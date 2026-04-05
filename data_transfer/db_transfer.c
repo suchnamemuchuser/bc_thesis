@@ -148,7 +148,7 @@ int checkAndUpdateDb(char* dbFileName, char* baseURL)
         curl_global_cleanup();
 }
 
-DbItem getDbItem(char* dbFileName, int timestamp) {
+DbItem getNextDbItem(char* dbFileName, int timestamp) {
     sqlite3 *db;
     sqlite3_stmt *res;
     DbItem item = {0}; // Initialize with zeros (id = 0 often indicates "not found")
@@ -241,6 +241,50 @@ void printDbItem(DbItem item){
     printf("End time:");
     printLocalTime(item.end_time);
     printf("\n");
+}
+
+DbItem getDbItemById(char* dbFileName, int id){
+    sqlite3 *db;
+    sqlite3_stmt *res;
+    DbItem item = {0}; // Initialize with zeros (id = 0 often indicates "not found")
+    item.id = -1;      // Using -1 as a clearer "not found" sentinel
+
+    if (sqlite3_open(dbFileName, &db) != SQLITE_OK) {
+        fprintf(stderr, "Cannot open database: %s\n", sqlite3_errmsg(db));
+        return item;
+    }
+
+    const char *sql = "SELECT id, object_name, is_interstellar, obs_start_time, "
+                    "rec_start_time, end_time FROM plan "
+                    "WHERE id == ?";
+
+    sqlite3_bind_int(res, 1, id);
+
+    int step = sqlite3_step(res);
+    if (step == SQLITE_ROW) {
+        item.id = sqlite3_column_int(res, 0);
+        const char* name = (const char*)sqlite3_column_text(res, 1);
+        if (name)
+        {
+        // Copy the string into the fixed-size array safely
+            snprintf(item.object_name, sizeof(item.object_name), "%s", name);
+        }
+        else
+        {
+            item.object_name[0] = '\0'; // Empty string if NULL
+        }
+        
+        item.is_interstellar = sqlite3_column_int(res, 2);
+        item.obs_start_time = sqlite3_column_int(res, 3);
+        item.rec_start_time = sqlite3_column_int(res, 4);
+        item.end_time = sqlite3_column_int(res, 5);
+    }
+
+    // 5. Cleanup
+    sqlite3_finalize(res);
+    sqlite3_close(db);
+
+    return item;
 }
 
 #endif

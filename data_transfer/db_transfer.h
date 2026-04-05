@@ -24,4 +24,6 @@ DbItem getDbItem(char* dbFileName, int timestamp);
 
 void printDbItem(DbItem item);
 
+DbItem getDbItemById(char* dbFileName, int id);
+
 #endif
