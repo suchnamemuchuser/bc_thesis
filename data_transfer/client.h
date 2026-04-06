@@ -1,28 +1,27 @@
 #ifndef CLIENT_H
 #define CLIENT_H
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <pthread.h>
 #include "CircularBuffer.h"
-#include "NetworkProtocol.h"
+#include "db_transfer.h"
+#include "config.h"
+#include <pthread.h>
 
-typedef struct {
-    char server_host[256];
-    int server_port;
-
-    uint64_t timestamp;
-    char name[256];
-    
+typedef struct bufferSession {
     circularBuffer buffer;
 
+    // ALL ACCESS TO BUFFERSESSION UNDER MUTEX!
     pthread_mutex_t buffer_lock;
-    pthread_cond_t data_available;
-    pthread_cond_t space_available;
-    
-} ClientSession;
 
-void* networkProducerThread(void* arg);
-void* fileConsumerThread(void* arg);
+    pthread_cond_t data_available;
+
+    Device deviceInfo;
+
+    DbItem recordingInfo;
+
+} BufferSession;
+
+void* clientProducerThread(void* arg);
+
+void* bufferFileConsumerThread(void* arg);
 
 #endif // CLIENT_H
