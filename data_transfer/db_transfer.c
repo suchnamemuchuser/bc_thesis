@@ -287,4 +287,4 @@ DbItem getDbItemById(char* dbFileName, int id){
     return item;
 }
 
-#endif
+#endif // DB_TRANSFER_C
