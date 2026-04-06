@@ -256,8 +256,14 @@ DbItem getDbItemById(char* dbFileName, int id){
 
     const char *sql = "SELECT id, object_name, is_interstellar, obs_start_time, "
                     "rec_start_time, end_time FROM plan "
-                    "WHERE id == ?";
+                    "WHERE id = ?";
 
+    if (sqlite3_prepare_v2(db, sql, -1, &res, 0) != SQLITE_OK) {
+        fprintf(stderr, "Failed to fetch data: %s\n", sqlite3_errmsg(db));
+        sqlite3_close(db);
+        return item;
+    }
+                    
     sqlite3_bind_int(res, 1, id);
 
     int step = sqlite3_step(res);
