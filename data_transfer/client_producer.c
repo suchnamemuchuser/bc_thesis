@@ -1,83 +1,60 @@
-#define _XOPEN_SOURCE 700 // Fix incomplete struct addrinfo
+#define _XOPEN_SOURCE 700
 #define _DEFAULT_SOURCE
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
+#ifndef CLIENT_PRODUCER_C
+#define CLIENT_PRODUCER_C
+
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <arpa/inet.h>
-#include <endian.h>    // For be64toh (Network to Host for 64-bit)
+#include "NetworkProtocol.h"
 
 #include "client.h"
 
 #define RECONNECT_DELAY_SECONDS 5
-#define DATA_PACKET_SIZE 3 * 256 * 1000
 
-ssize_t recv_exact(int sockfd, void *buf, size_t len)
-{
-    size_t total_received = 0;
-    uint8_t *ptr = (uint8_t *)buf;
+extern AppConfig* appConfig;
 
-    while (total_received < len)
-    {
-        ssize_t bytes = recv(sockfd, ptr + total_received, len - total_received, 0);
+ssize_t recvExact(int sockfd, void *buf, size_t len);
 
-        if (bytes <= 0)
-        {
-            return bytes; // 0 means disconnected, <0 means error
-        }
-
-        total_received += bytes;
-    }
-
-    return total_received;
-}
-
-void* networkProducerThread(void* arg)
-{
-    ClientSession* session = (ClientSession*)arg;
-
-    pthread_t consumer_tid;
+void* clientProducerThread(void* arg){
+    BufferSession* bufferSession = (BufferSession*)arg; 
     
     int sockfd = -1;
     struct addrinfo hints, *servinfo, *p;
     int rv;
     char port_str[6];
 
-    snprintf(port_str, sizeof(port_str), "%d", session->server_port);
+    snprintf(port_str, sizeof(port_str), "%d", bufferSession->deviceInfo.port);
 
     memset(&hints, 0, sizeof hints);
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
-    // Allocate read buffer
-    size_t read_buffer_size = DATA_PACKET_SIZE;
-    uint8_t *read_buffer = malloc(read_buffer_size);
-    if (read_buffer == NULL)
+    size_t readBufferSize = DATA_PACKET_DEFAULT_SIZE;
+    uint8_t *readBuffer = malloc(DATA_PACKET_DEFAULT_SIZE);
+    if (readBuffer == NULL)
     {
         fprintf(stderr, "Writer: Failed to allocate read buffer\n");
-        return NULL;
+        exit(1);
     }
 
     bool connected;
 
-    // connect
     while (true)
     {
         connected = false;
 
         // resolve and connect
-        printf("Writer: Attempting to connect to %s:%s\n", session->server_host, port_str);
+        printf("Writer: Attempting to connect to %s:%s\n", bufferSession->deviceInfo.source, port_str);
                
         servinfo = NULL; 
         sockfd = -1; // reset socket descriptor
 
         printf("Resolving dn\n");
         // resolve domain name
-        if ((rv = getaddrinfo(session->server_host, port_str, &hints, &servinfo)) != 0)
+        if ((rv = getaddrinfo(bufferSession->deviceInfo.source, port_str, &hints, &servinfo)) != 0)
         {
             fprintf(stderr, "writer getaddrinfo: %s\n", gai_strerror(rv));
             // Resolution failed, skip connection attempt
@@ -107,26 +84,26 @@ void* networkProducerThread(void* arg)
             
             if (!connected)
             {
-                fprintf(stderr, "writer: failed to connect to %s\n", session->server_host);
+                fprintf(stderr, "writer: failed to connect to %s\n", bufferSession->deviceInfo.source);
             }
-
-            printf("Connected?\n");
         }
-        
+
         if (connected)
         {
             printf("Writer: Connected. Waiting for packets...\n");
-            ssize_t bytes_received;
+            ssize_t bytesReceived;
 
-            while (connected) 
+            while (connected)
             {
                 ProtocolHeader header;
 
-                bytes_received = recv_exact(sockfd, &header, sizeof(ProtocolHeader));
+                bytesReceived = recvExact(sockfd, &header, sizeof(ProtocolHeader));
+                
+                header.value = ntohl(header.value);
 
-                if (bytes_received <= 0) 
+                if (bytesReceived <= 0) 
                 {
-                    if (bytes_received < 0) perror("Writer: recv error on header");
+                    if (bytesReceived < 0) perror("Writer: recv error on header");
                     else printf("Writer: Connection closed by server.\n");
                     connected = false; 
                     break;
@@ -139,103 +116,90 @@ void* networkProducerThread(void* arg)
                     break;
                 }
 
-                uint16_t payload_length = ntohl(header.length);
-
-                if (header.type == PACKET_TYPE_START) 
+                if (header.type == PACKET_TYPE_START) // start - set the buffer target info
                 {
-                    StartPayload start_data;
-                    
-                    // Read the payload
-                    bytes_received = recv_exact(sockfd, &start_data, sizeof(StartPayload));
-                    if (bytes_received <= 0) {
-                        connected = false; break;
-                    }
+                    DbItem newRecording = getDbItemById(appConfig->database, header.value);
 
-                    printf("Writer: START packet received. Name: %s, Time: %lu\n", start_data.name, start_data.timestamp);
-                    
-                    pthread_mutex_lock(&session->buffer_lock);
-                    session->buffer.writerFinished = false; // Reset for the new recording
-                    pthread_mutex_unlock(&session->buffer_lock);
-
-                    memset(session->name, 0, 256);
-                    strcpy(session->name, start_data.name);
-                    session->timestamp = be64toh(start_data.timestamp);
-
-                    printf("Producer: Spawning Consumer thread...\n");
-                    if (pthread_create(&consumer_tid, NULL, fileConsumerThread, (void*)session) != 0)
+                    pthread_mutex_lock(&bufferSession->buffer_lock);
+                    bufferSession->recordingInfo = newRecording;
+                    bufferSession->buffer.recordingActive = true;
+                    pthread_mutex_unlock(&bufferSession->buffer_lock);
+                }
+                else if (header.type == PACKET_TYPE_DATA) // write data into buffer
+                {
+                    size_t dataToRead = header.value;
+                    while (dataToRead > 0)
                     {
-                        perror("Producer: Failed to create Consumer thread");
-                        connected = false; 
-                        break; // Drop connection to resync, we can't record without a consumer!
-                    }
+                        if (dataToRead > readBufferSize)
+                        {
+                            bytesReceived = recvExact(sockfd, readBuffer, readBufferSize);
+                        }
+                        else
+                        {
+                            bytesReceived = recvExact(sockfd, readBuffer, dataToRead);
+                        }
 
+                        pthread_mutex_lock(&bufferSession->buffer_lock);
+                        size_t space = circularBufferWriterSpace(&bufferSession->buffer);
+                        pthread_mutex_unlock(&bufferSession->buffer_lock);
+
+                        if (space >= (size_t)bytesReceived)
+                        {
+                            circularBufferMemWrite(&bufferSession->buffer, readBuffer, bytesReceived);
+                            pthread_mutex_lock(&bufferSession->buffer_lock);
+                            circularBufferConfirmWrite(&bufferSession->buffer, bytesReceived);
+                            pthread_cond_broadcast(&bufferSession->data_available);
+                            pthread_mutex_unlock(&bufferSession->buffer_lock);
+                        }
+
+                        dataToRead -= bytesReceived;
+                    }
                 }
-                else if (header.type == PACKET_TYPE_DATA) 
+                else if (header.type == PACKET_TYPE_END) // set end flag
                 {
-                    // Ensure we don't read more than our buffer can hold
-                    size_t bytes_to_read = payload_length;
-                    if (bytes_to_read > read_buffer_size) {
-                        fprintf(stderr, "Writer: Warning! Payload (%u) larger than read buffer (%zu)\n", payload_length, read_buffer_size);
-                        bytes_to_read = read_buffer_size; // Cap it to avoid overflow
-                    }
-
-                    // Read exactly 'bytes_to_read' bytes of data
-                    bytes_received = recv_exact(sockfd, read_buffer, bytes_to_read);
-                    if (bytes_received <= 0) {
-                        connected = false; break;
-                    }
-
-                    // --- Your Existing Buffer Writing Logic ---
-                    pthread_mutex_lock(&session->buffer_lock);
-                    size_t space = circularBufferWriterSpace(&session->buffer);
-
-                    if (space >= (size_t)bytes_received)
-                    {
-                        circularBufferMemWrite(&session->buffer, read_buffer, bytes_received);
-                    }
-                    else
-                    {
-                        fprintf(stderr, "Writer: Buffer full! Dropping %zd bytes.\n", bytes_received);
-                    }
-
-                    // Wake up any waiting reader threads
-                    circularBufferConfirmWrite(&session->buffer, bytes_received);
-                    pthread_cond_broadcast(&session->data_available);
-                    pthread_mutex_unlock(&session->buffer_lock);
+                    pthread_mutex_lock(&bufferSession->buffer_lock);
+                    bufferSession->buffer.recordingActive = false;
+                    pthread_cond_broadcast(&bufferSession->data_available);
+                    pthread_mutex_unlock(&bufferSession->buffer_lock);
                 }
-                else if (header.type == PACKET_TYPE_END) 
+                else if (header.type == PACKET_TYPE_INACTIVE) // wait for next read
                 {
-                    printf("Writer: END packet received. Signaling readers to finish.\n");
-                    
-                    // No payload to read for END packets (assuming length is 0)
-                    
-                    pthread_mutex_lock(&session->buffer_lock);
-                    session->buffer.writerFinished = true;
-                    pthread_cond_broadcast(&session->data_available); 
-                    pthread_mutex_unlock(&session->buffer_lock);
-
-                    printf("Producer: Waiting for Consumer to flush to disk...\n");
-                    pthread_join(consumer_tid, NULL);
-                    printf("Producer: Consumer successfully finished. Ready for next START.\n");
+                    pthread_cond_broadcast(&bufferSession->data_available); // ensure consumers wake
                 }
-                else 
-                {
-                    fprintf(stderr, "Writer: Unknown packet type 0x%02X received!\n", header.type);
-                    // You might want to just read and discard `payload_length` bytes here 
-                    // so you don't lose your place in the TCP stream.
-                }
-
-            } // End of Read loop
-            
-            // Connection was lost, close the bad socket
-            if (sockfd != -1) {
-                close(sockfd);
-                sockfd = -1; 
             }
         }
 
         sleep(RECONNECT_DELAY_SECONDS);
     }
-    
+
+
+
+
+
+
+
     return NULL;
 }
+
+
+ssize_t recvExact(int sockfd, void *buf, size_t len)
+{
+    size_t total_received = 0;
+    uint8_t *ptr = (uint8_t *)buf;
+
+    while (total_received < len)
+    {
+        ssize_t bytes = recv(sockfd, ptr + total_received, len - total_received, 0);
+
+        if (bytes <= 0)
+        {
+            return bytes; // 0 means disconnected, <0 means error
+        }
+
+        total_received += bytes;
+    }
+
+    return total_received;
+}
+
+#endif // CLIENT_PRODUCER_C
