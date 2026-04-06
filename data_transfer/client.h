@@ -9,7 +9,7 @@
 typedef struct bufferSession {
     circularBuffer buffer;
 
-    // ALL ACCESS TO BUFFERSESSION UNDER MUTEX!
+    // Access to buffer session except device info under mutex!
     pthread_mutex_t buffer_lock;
 
     pthread_cond_t data_available;
