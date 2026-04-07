@@ -10,6 +10,8 @@
 
 #include "server.h"
 
+#define FILE_DEFAULT_READ_SIZE 15000
+
 extern AppConfig* appConfig;
 
 void recursive_mkdir(const char *path);
@@ -39,7 +41,7 @@ void* bufferFileConsumerThread(void* arg)
 
     while (true)
     {
-        readLen = 1000;
+        readLen = FILE_DEFAULT_READ_SIZE;
 
         pthread_mutex_lock(&bufferSession->buffer_lock);
         bufferRecordingActive = bufferSession->buffer.recordingActive;
