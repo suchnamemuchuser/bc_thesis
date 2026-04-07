@@ -36,12 +36,15 @@ int main(){
             exit(1);
         }
 
-        printf("Starting network consumer for buffer %d.\n", i+1);
-        pthread_t networkConsumer_tid;
-        if (pthread_create(&networkConsumer_tid, NULL, bufferNetworkConsumerThread, (void*)&bufferSessions[i]) != 0)
-        {
-            fprintf(stderr, "Failed to create network consumer thread.\n");
-            exit(1);
+        if (bufferSessions[i].deviceInfo.port != 0)
+        {   
+            printf("Starting network consumer for buffer %d.\n", i+1);
+            pthread_t networkConsumer_tid;
+            if (pthread_create(&networkConsumer_tid, NULL, bufferNetworkConsumerThread, (void*)&bufferSessions[i]) != 0)
+            {
+                fprintf(stderr, "Failed to create network consumer thread.\n");
+                exit(1);
+            }
         }
     }
 
