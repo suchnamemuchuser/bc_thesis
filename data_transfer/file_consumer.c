@@ -101,11 +101,31 @@ void* bufferFileConsumerThread(void* arg)
         }
         else if (threadRecordingActive && !bufferRecordingActive) // end recording - close file, align tail to writer
         {
-            fclose(file);
-
             pthread_mutex_lock(&bufferSession->buffer_lock);
+            int availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
+
+            while (availableData > 0)
+            {
+                size_t chunkToRead = (availableData > 1000) ? 1000 : availableData;
+                
+                readLen = circularBufferReadData(&bufferSession->buffer, consumerId, chunkToRead, &readPtr);
+                
+                pthread_mutex_unlock(&bufferSession->buffer_lock);
+                
+                if (readLen > 0) {
+                    fwrite(readPtr, sizeof(uint8_t), readLen, file);
+                }
+                
+                pthread_mutex_lock(&bufferSession->buffer_lock);
+                circularBufferConfirmRead(&bufferSession->buffer, consumerId, readLen);
+                
+                availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
+            }
+
             bufferSession->buffer.readerOffset[consumerId] = bufferSession->buffer.data_head_offset;
             pthread_mutex_unlock(&bufferSession->buffer_lock);
+
+            fclose(file);
         }
 
         threadRecordingActive = bufferRecordingActive;
