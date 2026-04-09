@@ -87,10 +87,10 @@
         <button type="submit" id="submit-btn">Generate Visibility</button>
     </form>
 
-    <div id="result-container" style="display: none">
+    <div id="result-container">
         <h3>Visibility Windows</h3>
         <ul id="windows-list"></ul>
-        <img id="plan-graph" class="graph" src="" alt="Observation Plan">
+        <img id="plan-graph" class="graph" src="" alt="Visibility" style="display: none">
         <img id="timeline-graph" class="graph" src="" alt="Observation Plan">
 
         <h3>Planned Observations</h3>
@@ -98,6 +98,7 @@
             <thead>
                 <tr style="background: #f0f0f0;">
                     <th>Target</th>
+                    <th>Id</th>
                     <th>OST</th>
                     <th>RST</th>
                     <th>ET</th>

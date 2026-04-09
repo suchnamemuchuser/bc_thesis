@@ -63,6 +63,7 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
 
         if (planGraph) {
             planGraph.src = URL.createObjectURL(chartBlob);
+            planGraph.style.display = "block";
         }
 
         const list = document.getElementById('windows-list');
@@ -293,6 +294,9 @@ async function refreshDayPlan(targetDate, planData = null) {
             const nameTd = document.createElement('td');
             nameTd.textContent = recording.object_name;
 
+            const idTd = document.createElement('td');
+            idTd.textContent = recording.id;
+
             const localeOptions = { 
                 year: 'numeric', 
                 month: 'numeric', 
@@ -339,6 +343,7 @@ async function refreshDayPlan(targetDate, planData = null) {
             actionTd.appendChild(delBtn);
 
             tr.appendChild(nameTd);
+            tr.appendChild(idTd);
             tr.appendChild(ostTd);
             tr.appendChild(rstTd);
             tr.appendChild(etTd);
@@ -364,3 +369,11 @@ async function refreshDayPlan(targetDate, planData = null) {
 
     return planData;
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+    const today = new Date().toISOString().split('T')[0]; 
+
+    refreshDayPlan(today).catch(error => {
+        console.error("Failed to initialize day plan on load:", error);
+    });
+});
