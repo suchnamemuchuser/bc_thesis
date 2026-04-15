@@ -94,6 +94,8 @@ int main(){
 
     DbItem emptyItem = {0};
 
+    currentRecording = emptyItem;
+
     while(1)
     {
         checkAndUpdateDb(appConfig->database, appConfig->webURL);
@@ -127,7 +129,12 @@ int main(){
         }
         else if (nextRecording.rec_start_time > curTime) // start recording - update recording info and set flag
         {
-            if (currentRecording.id == 0) continue;
+            if (currentRecording.id == 0)
+            {
+                sleep(60);
+                continue;
+            }
+            
             printf("Sleeping for %d\n", nextRecording.rec_start_time - curTime);
             sleep(nextRecording.rec_start_time - curTime);
 
