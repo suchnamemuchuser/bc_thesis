@@ -4,6 +4,7 @@
         <title>RT2 control</title>
     </head>
     <body>
+        <a href="history.php" style="text-decoration: none; color: #333;">&rarr; Planned Recordings</a>
         <h1>Pulsar Observation Planner</h1>
 
     <form id="plan-form">

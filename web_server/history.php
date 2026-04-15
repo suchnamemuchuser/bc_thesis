@@ -19,7 +19,7 @@
         </style>
     </head>
     <body>
-        <a href="main_page.php" style="text-decoration: none; color: #333;">&larr; Back to Planner</a>
+        <a href="index.php" style="text-decoration: none; color: #333;">&larr; Back to Planner</a>
         <h1>All Planned Observations</h1>
 
         <div style="margin-bottom: 20px;">
