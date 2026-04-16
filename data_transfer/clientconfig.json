@@ -3,15 +3,16 @@
     "web_url": "http://bogano/rt2/get_database.php",
     "database": "/var/lib/rt2/plan.db",
     "data_root_dir": "/home/suchname",
-    "data_base_dir": "pulsars",
+    "data_base_dir": "client",
+    "buffer_status_file": "/home/suchname/client/buffer_status.log",
     "devices": [
         {
-            "source": "DESKTOP-KT0NG2O",
+            "source": "localhost",
             "name": "rt1",
             "port": 65101
         },
         {
-            "source": "DESKTOP-KT0NG2O",
+            "source": "localhost",
             "name": "rt2",
             "port": 65102
         }

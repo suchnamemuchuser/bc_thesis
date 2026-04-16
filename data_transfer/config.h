@@ -13,6 +13,7 @@ typedef struct appConfig {
     char* database;
     char* dataRootDir;
     char* dataBaseDir;
+    char* bufferStatusFile;
     Device* devices;
     int deviceCount;
 } AppConfig;

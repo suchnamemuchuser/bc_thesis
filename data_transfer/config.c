@@ -40,6 +40,9 @@ AppConfig* loadConfig(const char *filename) {
     cJSON *dbd = cJSON_GetObjectItemCaseSensitive(json, "data_base_dir");
     config->dataBaseDir = cJSON_IsString(dbd) ? strdup(dbd->valuestring) : NULL;
 
+    cJSON *bsf = cJSON_GetObjectItemCaseSensitive(json, "buffer_status_file");
+    config->bufferStatusFile = cJSON_IsString(bsf) ? strdup(bsf->valuestring) : NULL;
+
     // 3. Get Devices Array
     cJSON *devices_array = cJSON_GetObjectItemCaseSensitive(json, "devices");
     config->deviceCount = cJSON_GetArraySize(devices_array);
@@ -74,6 +77,7 @@ int printConfig(AppConfig* config) {
     printf("Database: %s\n", config->database ? config->database : "NULL");
     printf("Data Root Dir: %s\n", config->dataRootDir ? config->dataRootDir : "NULL");
     printf("Data Base Dir: %s\n", config->dataBaseDir ? config->dataBaseDir : "NULL");
+    printf("Buffer Status File: %s\n", config->bufferStatusFile ? config->bufferStatusFile : "NULL");
     printf("Device Count: %d\n", config->deviceCount);
 
     if (config->devices == NULL || config->deviceCount == 0) {
