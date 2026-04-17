@@ -94,7 +94,9 @@ int main(){
         pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
     }
 
-    sleep(60);
+    sleep(10);
+    writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
+    sleep(10);
 
     printf("Ending test.\n");
 
