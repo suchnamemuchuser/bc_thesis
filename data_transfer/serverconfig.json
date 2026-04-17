@@ -2,9 +2,9 @@
     "buffer_size": 46080000,
     "web_url": "http://bogano/rt2/get_database.php",
     "database": "/home/suchname/bc_thesis/data_transfer/plan.db",
-    "data_root_dir": "/home/suchname",
+    "data_root_dir": "/home/josefm",
     "data_base_dir": "server",
-    "buffer_status_file": "/home/suchname/server/buffer_status.log",
+    "buffer_status_file": "/home/josefm/server/buffer_status.log",
     "devices": [
         {
             "source": "",
