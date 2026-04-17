@@ -50,57 +50,57 @@ int main(){
         }
     }
 
-    time_t now = time(NULL);
+    // time_t now = time(NULL);
 
-    DbItem testItem = {
-        .id = 1,
-        .object_name = "PSR1999+TEST",
-        .is_interstellar = 1,
-        .obs_start_time = (int)now,
-        .rec_start_time = (int)(now + 30),
-        .end_time = (int)(now + 30)
-    };
+    // DbItem testItem = {
+    //     .id = 1,
+    //     .object_name = "PSR1999+TEST",
+    //     .is_interstellar = 1,
+    //     .obs_start_time = (int)now,
+    //     .rec_start_time = (int)(now + 30),
+    //     .end_time = (int)(now + 30)
+    // };
 
-    printf("Starting test!\n");
+    // printf("Starting test!\n");
 
-    printf("Starting observation of %s\n", testItem.object_name);
+    // printf("Starting observation of %s\n", testItem.object_name);
 
-    sleep(30);
+    // sleep(30);
 
-    printf("Starting recording of %s\n", testItem.object_name);
+    // printf("Starting recording of %s\n", testItem.object_name);
 
-    for (int i = 0 ; i < appConfig->deviceCount ; i++)
-    {
-        pthread_mutex_lock(&bufferSessions[i].buffer_lock);
-        bufferSessions[i].recordingInfo = testItem;
-        bufferSessions[i].buffer.recordingActive = true;
-        pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
-    }
+    // for (int i = 0 ; i < appConfig->deviceCount ; i++)
+    // {
+    //     pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+    //     bufferSessions[i].recordingInfo = testItem;
+    //     bufferSessions[i].buffer.recordingActive = true;
+    //     pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
+    // }
 
-    sleep(10);
-    writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
-    sleep(10);
-    writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
-    sleep(10);
-    writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
-    sleep(10);
+    // sleep(10);
+    // writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
+    // sleep(10);
+    // writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
+    // sleep(10);
+    // writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
+    // sleep(10);
 
-    printf("Ending recording.\n");
+    // printf("Ending recording.\n");
 
-    for (int i = 0 ; i < appConfig->deviceCount ; i++)
-    {
-        pthread_mutex_lock(&bufferSessions[i].buffer_lock);
-        bufferSessions[i].buffer.recordingActive = false;
-        pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
-    }
+    // for (int i = 0 ; i < appConfig->deviceCount ; i++)
+    // {
+    //     pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+    //     bufferSessions[i].buffer.recordingActive = false;
+    //     pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
+    // }
 
-    sleep(10);
-    writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
-    sleep(10);
+    // sleep(10);
+    // writeBufferStatusToFile(appConfig->bufferStatusFile, bufferSessions, appConfig->deviceCount);
+    // sleep(10);
 
-    printf("Ending test.\n");
+    // printf("Ending test.\n");
 
-    exit(0);
+    // exit(0);
 
     DbItem emptyItem = {0};
 
