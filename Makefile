@@ -4,7 +4,6 @@ WEB_BIN?=/var/www/bin
 USR_BIN?=~/bin
 DB_DIR?=/var/lib/rt2
 DB_FILE=$(DB_DIR)/plan.db
-VIS_DB_FILE=$(DB_DIR)/visibility.db
 
 PHP_FILES=*.php
 OTHER_FILES=style.css script.js history.js
@@ -28,10 +27,13 @@ sun:
 db:
 	mkdir -p $(DB_DIR)
 	@if [ ! -f $(DB_FILE) ]; then \
-		sqlite3 $(DB_FILE) < web_server/schema.sql; \
+		sqlite3 $(DB_FILE) < web_server/web_db_schema.sql; \
 	fi
-	@if [ ! -f $(VIS_DB_FILE) ]; then \
-		sqlite3 $(VIS_DB_FILE) < web_server/visibility_schema.sql; \
-	fi
+
+	chown -R www-data:www-data $(DB_DIR)
+
+	chmod 775 $(DB_DIR)
+
+	chmod 664 $(DB_FILE)
 
 install: web script db
