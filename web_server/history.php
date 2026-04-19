@@ -1,7 +1,7 @@
 <html>
     <head>
         <link rel="stylesheet" href="style.css">
-        <title>Observation History & Future Plans</title>
+        <title>Observations</title>
         <style>
             .filter-btn { 
                 padding: 6px 16px; 
@@ -20,7 +20,7 @@
     </head>
     <body>
         <a href="index.php" style="text-decoration: none; color: #333;">&larr; Back to Planner</a>
-        <h1>All Planned Observations</h1>
+        <h1>Observations</h1>
 
         <div style="margin-bottom: 20px;">
             <button class="filter-btn active" data-filter="all">All Recordings</button>
