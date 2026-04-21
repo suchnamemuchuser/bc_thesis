@@ -43,7 +43,7 @@ void update_database(const char *db_filename, const char *json_string, int curre
 
     // Prepare the statement once for efficiency
     sqlite3_stmt *res;
-    const char *sql = "INSERT INTO plan (id, object_name, is_interstellar, obs_start_time, rec_start_time, end_time) VALUES (?, ?, ?, ?, ?, ?);";
+    const char *sql = "INSERT INTO plan (id, object_name, is_interstellar, obs_start_time, rec_start_time, end_time, record) VALUES (?, ?, ?, ?, ?, ?, ?);";
     sqlite3_prepare_v2(db, sql, -1, &res, NULL);
 
     cJSON *item = NULL;
@@ -55,6 +55,7 @@ void update_database(const char *db_filename, const char *json_string, int curre
         sqlite3_bind_int64(res, 4, cJSON_GetObjectItem(item, "obs_start_time")->valueint);
         sqlite3_bind_int64(res, 5, cJSON_GetObjectItem(item, "rec_start_time")->valueint);
         sqlite3_bind_int64(res, 6, cJSON_GetObjectItem(item, "end_time")->valueint);
+        sqlite3_bind_int64(res, 7, cJSON_GetObjectItem(item, "record")->valueint);
 
         sqlite3_step(res);      // Execute the insert
         sqlite3_reset(res);     // Clear bindings for next row
@@ -163,7 +164,7 @@ DbItem getNextDbItem(char* dbFileName, int timestamp) {
     // 2. Prepare SQL Query
     // Updated SQL string
     const char *sql = "SELECT id, object_name, is_interstellar, obs_start_time, "
-                    "rec_start_time, end_time FROM plan "
+                    "rec_start_time, end_time, record FROM plan "
                     "WHERE (obs_start_time > ? + 10 AND obs_start_time < ? + 300) "
                     "OR (rec_start_time > ? + 10 AND rec_start_time < ? + 300) "
                     "OR (end_time > ? + 10 AND end_time < ? + 300) "
@@ -204,6 +205,7 @@ DbItem getNextDbItem(char* dbFileName, int timestamp) {
         item.obs_start_time = sqlite3_column_int(res, 3);
         item.rec_start_time = sqlite3_column_int(res, 4);
         item.end_time = sqlite3_column_int(res, 5);
+        item.record = sqlite3_column_int(res, 6);
     }
 
     // 5. Cleanup
@@ -240,7 +242,8 @@ void printDbItem(DbItem item){
     printf("\n");
     printf("End time:");
     printLocalTime(item.end_time);
-    printf("\n");
+    printf("\n");\
+    printf("Record: %d\n", item.record);
 }
 
 DbItem getDbItemById(char* dbFileName, int id){
@@ -251,6 +254,7 @@ DbItem getDbItemById(char* dbFileName, int id){
         .object_name = "UNKNOWN",
         .is_interstellar = 1,
         .obs_start_time = time(NULL),
+        .record = 1,
     }; // Initialize with zeros (id = 0 often indicates "not found")
     // Using -1 as a clearer "not found" sentinel
 
