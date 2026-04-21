@@ -163,11 +163,6 @@ void run_ftdi_producer(BufferSession* bufferSession)
             fprintf(stderr, "FTDI read error on %s\n", bufferSession->deviceInfo.name);
             break; 
         }
-        if (bytes_read == 0)
-        {
-            usleep(100); // sleep a bit if empty
-            continue;
-        }
 
         pthread_mutex_lock(&bufferSession->buffer_lock);
 
