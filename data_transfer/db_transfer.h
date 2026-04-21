@@ -16,6 +16,7 @@ typedef struct dbItem {
     int obs_start_time;
     int rec_start_time;
     int end_time;
+    int record;
 } DbItem;
 
 int checkAndUpdateDb(char* dbFileName, char* baseURL);

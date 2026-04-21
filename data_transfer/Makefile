@@ -7,6 +7,7 @@ SERVEROUT = server.out
 CLIENT = client.c client_producer.c
 CLIENTOUT = client.out
 
+all: server client
 
 server: $(COMMON) $(SERVER)
 	$(CC) $(SERVER) $(COMMON) -o $(SERVEROUT) $(LIBS) $(FTDI_LIB)
