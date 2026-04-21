@@ -7,10 +7,19 @@ SERVEROUT = server.out
 CLIENT = client.c client_producer.c
 CLIENTOUT = client.out
 
+DB_FILE = plan.db
+DB_SCHEMA = telescope_db_schema.sql
+
 all: server client
 
-server: $(COMMON) $(SERVER)
+server: $(COMMON) $(SERVER) | $(DB_FILE)
 	$(CC) $(SERVER) $(COMMON) -o $(SERVEROUT) $(LIBS) $(FTDI_LIB)
 
 client: $(COMMON) $(CLIENT)
 	$(CC) $(CLIENT) $(COMMON) -o $(CLIENTOUT) $(LIBS)
+
+$(DB_FILE):
+	sqlite3 $(DB_FILE) < $(DB_SCHEMA)
+
+clean:
+	rm -f $(SERVEROUT) $(CLIENTOUT)
