@@ -71,12 +71,17 @@ void run_dummy_producer(BufferSession* bufferSession)
 
 void run_ftdi_producer(BufferSession* bufferSession)
 {
-    // source is index?
-    int spec_idx = atoi(bufferSession->deviceInfo.source);
+    const char* target_id = bufferSession->deviceInfo.source;
     
+    if (target_id == NULL) 
+    {
+        fprintf(stderr, "Target FTDI device string is NULL for %s\n", bufferSession->deviceInfo.name);
+        return;
+    }
+
     struct ftdi_context *ftdi;
     struct ftdi_device_list *devlist = NULL, *curdev = NULL, *used_dev = NULL;
-    int ret, i;
+    int ret;
 
     if ((ftdi = ftdi_new()) == 0)
     {
@@ -90,32 +95,46 @@ void run_ftdi_producer(BufferSession* bufferSession)
         return;
     }
 
-    if (spec_idx >= ret)
-    {
-        fprintf(stderr, "Requested FTDI index %d, but only found %d devices!\n", spec_idx, ret);
-        ftdi_list_free(&devlist);
-        ftdi_free(ftdi);
-        return;
-    }
+    char manufacturer[128];
+    char description[128];
+    char serial[128];
 
-    for (curdev = devlist, i = 0; curdev != NULL; i++, curdev = curdev->next)
+    // iterate through devs
+    for (curdev = devlist; curdev != NULL; curdev = curdev->next)
     {
-        if (i == spec_idx)
+        // reset description
+        description[0] = '\0';
+
+        if (ftdi_usb_get_strings(ftdi, curdev->dev, manufacturer, sizeof(manufacturer), 
+                                 description, sizeof(description), serial, sizeof(serial)) >= 0)
         {
-            used_dev = curdev; break;
+            // check description
+            if (strcmp(description, target_id) == 0)
+            {
+                used_dev = curdev;
+                break;
+            }
         }
     }
 
-    if (used_dev == NULL || ftdi_usb_open_dev(ftdi, used_dev->dev) < 0)
+    if (used_dev == NULL) // not found
     {
-        fprintf(stderr, "Unable to open FTDI device %d\n", spec_idx);
+        fprintf(stderr, "FATAL: Could not find FTDI device with description: '%s'. Exiting.\n", target_id);
         ftdi_list_free(&devlist);
         ftdi_free(ftdi);
-        return;
+        exit(EXIT_FAILURE);
     }
+
+    if (ftdi_usb_open_dev(ftdi, used_dev->dev) < 0)
+    {
+        fprintf(stderr, "Unable to open FTDI device '%s'\n", target_id);
+        ftdi_list_free(&devlist);
+        ftdi_free(ftdi);
+        exit(EXIT_FAILURE);
+    }
+    
     ftdi_list_free(&devlist);
 
-    // FTDI Hardware Initialization Pipeline
     ftdi_usb_reset(ftdi);
     ftdi_tcioflush(ftdi);
     ftdi_set_bitmode(ftdi, 0xFF, BITMODE_RESET);
@@ -126,10 +145,13 @@ void run_ftdi_producer(BufferSession* bufferSession)
     if (dataBuffer == NULL)
     {
         fprintf(stderr, "FTDI data buffer malloc fail!\n");
-        return;
+        ftdi_disable_bitbang(ftdi);
+        ftdi_usb_close(ftdi);
+        ftdi_free(ftdi);
+        exit(EXIT_FAILURE);
     }
 
-    printf("Started FTDI producer for %s on device index %d\n", bufferSession->deviceInfo.name, spec_idx);
+    printf("Started FTDI producer for %s on device '%s'\n", bufferSession->deviceInfo.name, target_id);
 
     while(true)
     {
