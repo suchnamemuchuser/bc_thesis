@@ -58,7 +58,8 @@ int main(){
     //     .is_interstellar = 1,
     //     .obs_start_time = (int)now,
     //     .rec_start_time = (int)(now + 30),
-    //     .end_time = (int)(now + 30)
+    //     .end_time = (int)(now + 30),
+    //     .record = 0
     // };
 
     // printf("Starting test!\n");

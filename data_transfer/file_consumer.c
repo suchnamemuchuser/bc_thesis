@@ -51,37 +51,43 @@ void* bufferFileConsumerThread(void* arg)
         {
             usleep(10000);
         }
-        else if (!threadRecordingActive && bufferRecordingActive) // start recording - open file
+        else if (!threadRecordingActive && bufferRecordingActive) // start recording - open file if record flag is set
         {
             pthread_mutex_lock(&bufferSession->buffer_lock);
 
-            time_t rawTime = (time_t)bufferSession->recordingInfo.rec_start_time;
-            localtime_r(&rawTime, &timeInfo);
-            strftime(timeStr, sizeof(timeStr), "%Y.%m.%d-%H:%M", &timeInfo);
+            // Check record flag under mutex
+            bool shouldRecordToFile = bufferSession->recordingInfo.record;
 
-            snprintf(dirPath, sizeof(dirPath), "%s/%s/%s",
-                     appConfig->dataRootDir,
-                     appConfig->dataBaseDir,
-                     bufferSession->recordingInfo.object_name);
-                    
-            recursive_mkdir(dirPath);
+            if (shouldRecordToFile) {
+                time_t rawTime = (time_t)bufferSession->recordingInfo.rec_start_time;
+                localtime_r(&rawTime, &timeInfo);
+                strftime(timeStr, sizeof(timeStr), "%Y.%m.%d-%H:%M", &timeInfo);
 
-            snprintf(filePath, sizeof(filePath), "%s/%s.%s",
-                     dirPath,
-                     timeStr,
-                     bufferSession->deviceInfo.name);
-            
-            file = fopen(filePath, "wb");
+                snprintf(dirPath, sizeof(dirPath), "%s/%s/%s",
+                         appConfig->dataRootDir,
+                         appConfig->dataBaseDir,
+                         bufferSession->recordingInfo.object_name);
+                        
+                recursive_mkdir(dirPath);
 
-            if (file == NULL) {
-                perror("Failed to open file for writing");
-                exit(1);
+                snprintf(filePath, sizeof(filePath), "%s/%s.%s",
+                         dirPath,
+                         timeStr,
+                         bufferSession->deviceInfo.name);
+                
+                file = fopen(filePath, "wb");
+
+                if (file == NULL) {
+                    perror("Failed to open file for writing");
+                    exit(1);
+                }
+
+                printf("File opened successfully: %s\n", filePath);
             }
 
-            printf("File opened successfully: %s\n", filePath);
             pthread_mutex_unlock(&bufferSession->buffer_lock);
         }
-        else if (threadRecordingActive && bufferRecordingActive) // recording - write into file
+        else if (threadRecordingActive && bufferRecordingActive) // recording - write into file if opened
         {
             pthread_mutex_lock(&bufferSession->buffer_lock);
             int availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
@@ -100,13 +106,17 @@ void* bufferFileConsumerThread(void* arg)
 
             pthread_mutex_unlock(&bufferSession->buffer_lock);
 
-            fwrite(readPtr, sizeof(uint8_t), readLen, file);
+            // Only write to file if it was opened (record flag was set)
+            if (file != NULL) {
+                fwrite(readPtr, sizeof(uint8_t), readLen, file);
+            }
+            // If file is NULL (record flag was 0), skip writing but still consume the data
 
             pthread_mutex_lock(&bufferSession->buffer_lock);
             circularBufferConfirmRead(&bufferSession->buffer, consumerId, readLen);
             pthread_mutex_unlock(&bufferSession->buffer_lock);
         }
-        else if (threadRecordingActive && !bufferRecordingActive) // end recording - close file, align tail to writer
+        else if (threadRecordingActive && !bufferRecordingActive) // end recording - close file if opened, align tail to writer
         {
             pthread_mutex_lock(&bufferSession->buffer_lock);
             int availableData = circularBufferAvailableData(&bufferSession->buffer, consumerId);
@@ -119,7 +129,8 @@ void* bufferFileConsumerThread(void* arg)
                 
                 pthread_mutex_unlock(&bufferSession->buffer_lock);
                 
-                if (readLen > 0) {
+                // Only write to file if it was opened (record flag was set)
+                if (file != NULL && readLen > 0) {
                     fwrite(readPtr, sizeof(uint8_t), readLen, file);
                 }
                 
@@ -132,7 +143,10 @@ void* bufferFileConsumerThread(void* arg)
             bufferSession->buffer.readerOffset[consumerId] = bufferSession->buffer.data_head_offset;
             pthread_mutex_unlock(&bufferSession->buffer_lock);
 
-            fclose(file);
+            if (file != NULL) {
+                fclose(file);
+                file = NULL;
+            }
         }
 
         threadRecordingActive = bufferRecordingActive;
