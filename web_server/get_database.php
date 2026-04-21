@@ -13,7 +13,7 @@ if ($clientVersion === $serverVersion) {
 
 $threshold = time() - 24 * 60 * 60;
 
-$stmt = $pdo->prepare('SELECT id, object_name, is_interstellar, obs_start_time, rec_start_time, end_time FROM plan WHERE end_time > :threshold');
+$stmt = $pdo->prepare('SELECT id, object_name, is_interstellar, obs_start_time, rec_start_time, end_time, record FROM plan WHERE end_time > :threshold');
 $stmt->bindValue(':threshold', $threshold, PDO::PARAM_INT);
 $stmt->execute();
 $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
