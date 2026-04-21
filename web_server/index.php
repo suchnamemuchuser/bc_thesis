@@ -1,3 +1,5 @@
+<?php require_once 'config.php'; ?>
+
 <html>
     <head>
         <link rel="stylesheet" href="style.css">
@@ -22,61 +24,19 @@
                 </tr>
             </thead>
             <tbody id="targets-body">
-                <tr>
-                    <td><input type="text" name="targets[0][name]" value="Sun" readonly></td>
-                    <td>
-                        <select name="targets[0][type]">
-                            <option value="solar" selected>Solar System</option>
-                            <option value="deep" disabled>Deep Space</option>
-                        </select>
-                    </td>
-                    <td><input type="checkbox" name="targets[0][enabled]" checked></td>
-                    <td><small>(Predefined)</small></td>
-                </tr>
-                <tr>
-                    <td><input type="text" name="targets[1][name]" value="B0329+54" readonly></td>
-                    <td>
-                        <select name="targets[1][type]">
-                            <option value="solar" disabled>Solar System</option>
-                            <option value="deep" selected>Deep Space</option>
-                        </select>
-                    </td>
-                    <td><input type="checkbox" name="targets[1][enabled]" checked></td>
-                    <td><small>(Predefined)</small></td>
-                </tr>
-                <tr>
-                    <td><input type="text" name="targets[2][name]" value="B0943+10" readonly></td>
-                    <td>
-                        <select name="targets[2][type]">
-                            <option value="solar" disabled>Solar System</option>
-                            <option value="deep" selected>Deep Space</option>
-                        </select>
-                    </td>
-                    <td><input type="checkbox" name="targets[2][enabled]" checked></td>
-                    <td><small>(Predefined)</small></td>
-                </tr>
-                <tr>
-                    <td><input type="text" name="targets[3][name]" value="B1957+20" readonly></td>
-                    <td>
-                        <select name="targets[3][type]">
-                            <option value="solar" disabled>Solar System</option>
-                            <option value="deep" selected>Deep Space</option>
-                        </select>
-                    </td>
-                    <td><input type="checkbox" name="targets[3][enabled]" checked></td>
-                    <td><small>(Predefined)</small></td>
-                </tr>
-                <tr>
-                    <td><input type="text" name="targets[4][name]" value="B1937+21" readonly></td>
-                    <td>
-                        <select name="targets[4][type]">
-                            <option value="solar" disabled>Solar System</option>
-                            <option value="deep" selected>Deep Space</option>
-                        </select>
-                    </td>
-                    <td><input type="checkbox" name="targets[4][enabled]" checked></td>
-                    <td><small>(Predefined)</small></td>
-                </tr>
+                <?php foreach ($predefinedTargets as $index => $target): ?>
+                    <tr>
+                        <td><input type="text" name="targets[<?php echo $index; ?>][name]" value="<?php echo htmlspecialchars($target['name']); ?>" readonly></td>
+                        <td>
+                            <select name="targets[<?php echo $index; ?>][type]">
+                                <option value="solar" <?php echo $target['type'] === 'solar' ? 'selected' : 'disabled'; ?>>Solar System</option>
+                                <option value="deep" <?php echo $target['type'] === 'deep' ? 'selected' : 'disabled'; ?>>Deep Space</option>
+                            </select>
+                        </td>
+                        <td><input type="checkbox" name="targets[<?php echo $index; ?>][enabled]" <?php echo $target['enabled'] ? 'checked' : ''; ?>></td>
+                        <td><small>(Predefined)</small></td>
+                    </tr>
+                <?php endforeach; ?>
             </tbody>
         </table>
         

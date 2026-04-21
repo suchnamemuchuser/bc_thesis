@@ -10,4 +10,12 @@ $localTz = new DateTimeZone('Europe/Prague');
 $dbPath = '/var/lib/rt2/plan.db';
 
 $itemsPerPage = 30;
+
+$predefinedTargets = [
+    ['name' => 'Sun',      'type' => 'solar', 'enabled' => true],
+    ['name' => 'B0329+54', 'type' => 'deep',  'enabled' => false],
+    ['name' => 'B0943+10', 'type' => 'deep',  'enabled' => false],
+    ['name' => 'B1957+20', 'type' => 'deep',  'enabled' => false],
+    ['name' => 'B1937+21', 'type' => 'deep',  'enabled' => false],
+];
 ?>
