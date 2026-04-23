@@ -7,6 +7,8 @@
 
 typedef struct circularBuffer
 {
+    int id; // id for client config
+
     uint8_t* data_ptr; // pointer to data
 
     size_t data_len; // length of data in bytes
