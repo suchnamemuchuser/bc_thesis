@@ -9,6 +9,10 @@
 typedef struct bufferSession {
     CircularBuffer buffer;
 
+    int bufferId;
+
+    char description[256];
+
     // Access to buffer session except device info under mutex!
     pthread_mutex_t buffer_lock;
 
@@ -21,7 +25,7 @@ typedef struct bufferSession {
 } BufferSession;
 
 typedef struct {
-    CircularBuffer** buffers;
+    BufferSession** sessions;
     int count;
 } BufferRegistry;
 
