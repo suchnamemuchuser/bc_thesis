@@ -24,20 +24,14 @@
                     <th>Recording Start (RST)</th>
                     <th>End Time (ET)</th>
                     <th>Status</th>
-                </tr>
+                    <th style="width: 40px;"></th> </tr>
             </thead>
             <tbody id="history-table-body">
-                <tr><td colspan="6" style="text-align: center; padding: 15px;">Loading data...</td></tr>
+                <tr><td colspan="7" style="text-align: center; padding: 15px;">Loading data...</td></tr>
             </tbody>
         </table>
 
         <div id="pagination-controls"></div>
-
-        <script>
-            window.APP_CONFIG = {
-                itemsPerPage: <?php echo intval($itemsPerPage); ?>
-            };
-        </script>
 
         <script src="history.js"></script>
     </body>

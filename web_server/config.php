@@ -18,4 +18,9 @@ $predefinedTargets = [
     ['name' => 'B1957+20', 'type' => 'deep',  'enabled' => false],
     ['name' => 'B1937+21', 'type' => 'deep',  'enabled' => false],
 ];
+
+$recordingBaseDir = "/var/lib/rt2/data";
+
+$alias = "/data";
+
 ?>
