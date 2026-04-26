@@ -2,7 +2,7 @@
 #include <stdio.h>
 #include <string.h> // for memset, strdup
 
-int circularBufferInit(circularBuffer* buffer, int bufferSize)
+int circularBufferInit(CircularBuffer* buffer, int bufferSize)
 {
     buffer->data_ptr = malloc((size_t) bufferSize);
 
@@ -29,7 +29,7 @@ int circularBufferInit(circularBuffer* buffer, int bufferSize)
     return 0;
 };
 
-void circularBufferFree(circularBuffer* buffer)
+void circularBufferFree(CircularBuffer* buffer)
 {
     if(buffer->data_ptr != NULL)
     {
@@ -41,7 +41,7 @@ void circularBufferFree(circularBuffer* buffer)
     buffer->data_len = 0;
 }
 
-int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len)
+int circularBufferMemWrite(CircularBuffer* cb, const uint8_t* src, size_t len)
 {
     if (len == 0)
     {
@@ -72,14 +72,14 @@ int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len)
     return len;
 }
 
-int circularBufferConfirmWrite(circularBuffer* cb, size_t writeLen)
+int circularBufferConfirmWrite(CircularBuffer* cb, size_t writeLen)
 {
     cb->data_head_offset = (cb->data_head_offset + writeLen) % cb->data_len;
 
     return 0;
 }
 
-size_t circularBufferWriterSpace(circularBuffer* cb)
+size_t circularBufferWriterSpace(CircularBuffer* cb)
 {
     size_t minSpace = cb->data_len - 1;
 
@@ -113,14 +113,14 @@ size_t circularBufferWriterSpace(circularBuffer* cb)
     return minSpace;
 }
 
-int circularBufferConfirmRead(circularBuffer* cb, int readerId, size_t readLen)
+int circularBufferConfirmRead(CircularBuffer* cb, int readerId, size_t readLen)
 {
     cb->readerOffset[readerId] = (cb->readerOffset[readerId] + readLen) % cb->data_len; // update offset
 
     return readLen;
 }
 
-int circularBufferAvailableData(circularBuffer* cb, int readerId)
+int circularBufferAvailableData(CircularBuffer* cb, int readerId)
 {
     int spaceLeft = 0;
 
@@ -136,7 +136,7 @@ int circularBufferAvailableData(circularBuffer* cb, int readerId)
     return spaceLeft;
 }
 
-int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr)
+int circularBufferReadData(CircularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr)
 {
     *read_ptr = cb->data_ptr + cb->readerOffset[readerId];
 
@@ -155,7 +155,7 @@ int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uin
     return spaceToEnd;
 }
 
-void circularBufferPrintStatus(circularBuffer* cb)
+void circularBufferPrintStatus(CircularBuffer* cb)
 {
     if (cb->reader_cnt < 1)
     {

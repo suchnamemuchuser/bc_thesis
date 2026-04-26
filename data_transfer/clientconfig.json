@@ -1,20 +1,63 @@
 {
-    "buffer_size": 46080000,
-    "web_url": "http://bogano/rt2/get_database.php",
-    "database": "/var/lib/rt2/plan.db",
-    "data_root_dir": "/home/josefm",
-    "data_base_dir": "client",
-    "buffer_status_file": "/home/josefm/client/buffer_status.log",
-    "devices": [
+    "buffer_status_file": "/home/suchname/client/buffer_status.log",
+    "buffers": [
         {
-            "source": "localhost",
-            "name": "rt1",
-            "port": 65101
+            "id": 0,
+            "size": 46080000,
+            "description": "raw data rt1"
         },
         {
-            "source": "localhost",
-            "name": "rt2",
-            "port": 65102
+            "id": 1,
+            "size": 46080000,
+            "description": "raw data rt2"
+        }
+    ],
+    "clients": [
+        {
+            "id": 0,
+            "description": "Network client 0",
+            "function": "network_producer",
+            "output_buffer": 0,
+            "input_buffers": [],
+            "args": {
+                "database": "/var/lib/rt2/plan.db",
+                "source": "localhost",
+                "port": 65101
+            }
+        },
+        {
+            "id": 1,
+            "description": "Network client 1",
+            "function": "network_producer",
+            "output_buffer": 1,
+            "input_buffers": [],
+            "args": {
+                "database": "/var/lib/rt2/plan.db",
+                "source": "localhost",
+                "port": 65102
+            }
+        },
+        {
+            "id": 2,
+            "description": "File consumer 0",
+            "function": "file_consumer",
+            "output_buffer": -1,
+            "input_buffers": [0],
+            "args": {
+                "data_dir": "/home/suchname/client",
+                "ext": "rt1"
+            }
+        },
+        {
+            "id": 3,
+            "description": "File consumer 1",
+            "function": "file_consumer",
+            "output_buffer": -1,
+            "input_buffers": [1],
+            "args": {
+                "data_dir": "/home/suchname/client",
+                "ext": "rt2"
+            }
         }
     ]
 }

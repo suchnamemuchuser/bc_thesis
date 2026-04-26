@@ -5,7 +5,7 @@
 
 #define READER_MAX_CAP 128
 
-typedef struct
+typedef struct circularBuffer
 {
     uint8_t* data_ptr; // pointer to data
 
@@ -19,22 +19,22 @@ typedef struct
 
     bool recordingActive;
 
-} circularBuffer;
+} CircularBuffer;
 
-int circularBufferInit(circularBuffer* buffer, int bufferSize);
+int circularBufferInit(CircularBuffer* buffer, int bufferSize);
 
-void circularBufferFree(circularBuffer* buffer);
+void circularBufferFree(CircularBuffer* buffer);
 
-int circularBufferMemWrite(circularBuffer* cb, const uint8_t* src, size_t len);
+int circularBufferMemWrite(CircularBuffer* cb, const uint8_t* src, size_t len);
 
-int circularBufferConfirmWrite(circularBuffer* buffer, size_t writeLen);
+int circularBufferConfirmWrite(CircularBuffer* buffer, size_t writeLen);
 
-size_t circularBufferWriterSpace(circularBuffer* buffer);
+size_t circularBufferWriterSpace(CircularBuffer* buffer);
 
-int circularBufferConfirmRead(circularBuffer* buffer, int readerId, size_t readLen);
+int circularBufferConfirmRead(CircularBuffer* buffer, int readerId, size_t readLen);
 
-int circularBufferAvailableData(circularBuffer* buffer, int readerId);
+int circularBufferAvailableData(CircularBuffer* buffer, int readerId);
 
-int circularBufferReadData(circularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr);
+int circularBufferReadData(CircularBuffer* cb, int readerId, size_t readLen, uint8_t** read_ptr);
 
-void circularBufferPrintStatus(circularBuffer* cb);
+void circularBufferPrintStatus(CircularBuffer* cb);

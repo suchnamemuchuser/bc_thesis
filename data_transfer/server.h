@@ -9,7 +9,7 @@
 #define MILLISECOND 1000
 
 typedef struct bufferSession {
-    circularBuffer buffer;
+    CircularBuffer buffer;
 
     // Access to buffer session except device info under mutex!
     pthread_mutex_t buffer_lock;

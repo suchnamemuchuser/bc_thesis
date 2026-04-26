@@ -7,7 +7,11 @@
 #include <pthread.h>
 
 typedef struct bufferSession {
-    circularBuffer buffer;
+    CircularBuffer buffer;
+
+    int bufferId;
+
+    char description[256];
 
     // Access to buffer session except device info under mutex!
     pthread_mutex_t buffer_lock;
@@ -19,6 +23,11 @@ typedef struct bufferSession {
     DbItem recordingInfo;
 
 } BufferSession;
+
+typedef struct {
+    BufferSession** sessions;
+    int count;
+} BufferRegistry;
 
 void* clientProducerThread(void* arg);
 
