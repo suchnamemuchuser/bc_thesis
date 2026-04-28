@@ -40,7 +40,7 @@ try {
         $plan['dir_url'] = '';
 
         $dt = new DateTime();
-        $dt->setTimestamp($plan['obs_start_time']);
+        $dt->setTimestamp($plan['rec_start_time']);
         $dt->setTimezone($localTz);
         $timeString = $dt->format('Y.m.d-H:i');
 
