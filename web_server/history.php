@@ -6,6 +6,7 @@
         <title>Observations</title>
     </head>
     <body>
+        <?php include 'header.php'; ?>
         <a href="index.php" style="text-decoration: none; color: #333;">&larr; Back to Planner</a>
         <h1>Observations</h1>
 
