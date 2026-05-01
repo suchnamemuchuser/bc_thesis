@@ -17,7 +17,7 @@
         <table id="targets-table" style="width:450px; border: 1px solid #ccc; border-collapse: collapse;">
             <thead>
                 <tr style="background: #f0f0f0;">
-                    <th>Object Name</th>
+                    <th>Target Name</th>
                     <th>Database</th>
                     <th>Calculate</th>
                     <th>Action</th>
@@ -41,7 +41,7 @@
         </table>
         
         <div style="margin-top: 10px;">
-            <button type="button" onclick="addRow()">+ Add Custom Object</button>
+            <button type="button" onclick="addRow()">+ Add Custom Target</button>
         </div>
         
         <br><br>
