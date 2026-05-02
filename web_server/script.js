@@ -378,9 +378,20 @@ async function refreshDayPlan(targetDate, planData = null) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-    const today = new Date().toISOString().split('T')[0]; 
+    const dateInput = document.getElementById('date');
+    const today = dateInput.value;
 
     refreshDayPlan(today).catch(error => {
         console.error("Failed to initialize day plan on load:", error);
+    });
+
+    dateInput.addEventListener('change', (event) => {
+        const selectedDate = event.target.value;
+        
+        if (selectedDate) {
+            refreshDayPlan(selectedDate).catch(error => {
+                console.error("Failed to refresh day plan for new date:", error);
+            });
+        }
     });
 });
