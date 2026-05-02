@@ -21,6 +21,29 @@
 
 #define FILE_DEFAULT_READ_SIZE 15000
 
+// defines for data processing
+#define HEADER_SYNC_BYTE 0xAA
+#define HEADER_MASK      0xFC
+#define HEADER_MATCH     0x80
+
+#define CHANNELS_PER_DEV 256
+#define TOTAL_CHANNELS   1024
+#define BYTES_PER_SAMPLE 3
+#define HEADER_SIZE      3
+
+// 3 + (256 * 3) = 771 bytes
+#define FRAME_SIZE       (HEADER_SIZE + (CHANNELS_PER_DEV * BYTES_PER_SAMPLE)) 
+
+// Number of frames to read at once to save mutex locks (e.g., 10ms)
+#define BATCH_SIZE_MS    10 
+#define READ_CHUNK_SIZE  (FRAME_SIZE * BATCH_SIZE_MS)
+
+typedef enum {
+    STATE_WAITING,
+    STATE_SYNCING,
+    STATE_PROCESSING
+} ProcessorState;
+
 ssize_t recvExact(int sockfd, void *buf, size_t len);
 
 void recursiveMkdir(const char *path);
@@ -331,125 +354,306 @@ void* bufferFileConsumerThread(void* arg)
 void* dataProcessorThread(void* arg)
 {
     ClientContext* ctx = (ClientContext*) arg;
-    
-    int numInputs = ctx->inputBufferCount; 
-    BufferSession** inSessions = ctx->inputBuffers;
-    BufferSession* outSession = ctx->outputBuffer;
+    BufferSession* masterBuf = ctx->inputBuffers[0];
+    BufferSession* outBuf = ctx->outputBuffer;
 
-    // We need to track our reader ID and offset for EACH input buffer
-    int consumerIds[numInputs];
-    for (int i = 0; i < numInputs; i++)
+    ProcessorState state = STATE_WAITING;
+    uint16_t expectedMs = 0;
+
+    int consumerIds[4];
+
+    // Register this thread as a consumer for all 4 input streams
+    for (int i = 0; i < 4; i++) 
     {
-        pthread_mutex_lock(&inSessions[i]->buffer_lock);
-        consumerIds[i] = inSessions[i]->buffer.reader_cnt;
-        inSessions[i]->buffer.readerOffset[consumerIds[i]] = inSessions[i]->buffer.data_head_offset;
-        inSessions[i]->buffer.reader_cnt++;
-        pthread_mutex_unlock(&inSessions[i]->buffer_lock);
+        BufferSession* inBuf = ctx->inputBuffers[i];
+        
+        pthread_mutex_lock(&inBuf->buffer_lock);
+        
+        consumerIds[i] = inBuf->buffer.reader_cnt;
+        inBuf->buffer.readerOffset[consumerIds[i]] = inBuf->buffer.data_head_offset;
+        inBuf->buffer.reader_cnt++;
+        
+        pthread_mutex_unlock(&inBuf->buffer_lock);
     }
-
-    bool outRecordingActive = false;
-    size_t readLen = FILE_DEFAULT_READ_SIZE; // Or an appropriate chunk size
-    uint8_t* readPtr;
 
     while (true)
     {
-        bool anyInputActive = false;
-        bool anyDataAvailable = false;
-        int firstActiveIdx = -1;
-
-        // 1. Evaluate the state of all input buffers
-        for (int i = 0; i < numInputs; i++)
+        if (state == STATE_WAITING)
         {
-            pthread_mutex_lock(&inSessions[i]->buffer_lock);
-            bool active = inSessions[i]->buffer.recordingActive;
-            int avail = circularBufferAvailableData(&inSessions[i]->buffer, consumerIds[i]);
-            pthread_mutex_unlock(&inSessions[i]->buffer_lock);
-
-            if (active || avail > 0)
+            // wait for the master buffer to start recording
+            pthread_mutex_lock(&masterBuf->buffer_lock);
+            
+            while (!masterBuf->buffer.recordingActive) //wait for recording
             {
-                anyDataAvailable = true;
-                if (active)
-                {
-                    anyInputActive = true;
-                    if (firstActiveIdx == -1) firstActiveIdx = i; // Catch the first active buffer
-                }
+                pthread_cond_wait(&masterBuf->data_available, &masterBuf->buffer_lock);
             }
-        }
+            
+            // copy metadata locally
+            DbItem currentRecordingInfo = masterBuf->recordingInfo;
+            
+            pthread_mutex_unlock(&masterBuf->buffer_lock);
 
-        // 2. Handle Output Start (Metadata Sync)
-        if (anyDataAvailable && !outRecordingActive)
-        {
-            pthread_mutex_lock(&outSession->buffer_lock);
-            if (firstActiveIdx != -1) {
-                // Copy recording info from the first active buffer we found
-                pthread_mutex_lock(&inSessions[firstActiveIdx]->buffer_lock);
-                outSession->recordingInfo = inSessions[firstActiveIdx]->recordingInfo;
-                pthread_mutex_unlock(&inSessions[firstActiveIdx]->buffer_lock);
-            }
-            outSession->buffer.recordingActive = true;
-            outRecordingActive = true;
-            pthread_mutex_unlock(&outSession->buffer_lock);
-            printf("Processor: Started recording, synced metadata.\n");
-        }
-
-        // 3. Process Data
-        if (anyDataAvailable)
-        {
-            for (int i = 0; i < numInputs; i++)
+            // propagate metadata and start the output buffer
+            if (outBuf != NULL)
             {
-                pthread_mutex_lock(&inSessions[i]->buffer_lock);
-                int avail = circularBufferAvailableData(&inSessions[i]->buffer, consumerIds[i]);
+                pthread_mutex_lock(&outBuf->buffer_lock);
                 
-                if (avail > 0)
+                outBuf->recordingInfo = currentRecordingInfo;
+                outBuf->buffer.recordingActive = true;
+                
+                // wake up consumers
+                pthread_cond_broadcast(&outBuf->data_available);
+                
+                pthread_mutex_unlock(&outBuf->buffer_lock);
+            }
+
+            state = STATE_SYNCING;
+        }
+        else if (state == STATE_SYNCING)
+        {
+            uint16_t streamMs[4];
+            bool recordingStopped = false;
+
+            // align all streams to their first valid frame boundary
+            for (int i = 0; i < 4; i++) 
+            {
+                BufferSession* inBuf = ctx->inputBuffers[i];
+                pthread_mutex_lock(&inBuf->buffer_lock);
+
+                // wait for at least 2 frames worth of data to ensure we have both header byte and following ms bytes
+                int avail = circularBufferAvailableData(&inBuf->buffer, consumerIds[i]);
+                while (inBuf->buffer.recordingActive && avail < (FRAME_SIZE * 2)) 
                 {
-                    size_t chunkToRead = (avail > readLen) ? readLen : avail;
-                    size_t actuallyRead = circularBufferReadData(&inSessions[i]->buffer, consumerIds[i], chunkToRead, &readPtr);
-                    pthread_mutex_unlock(&inSessions[i]->buffer_lock);
+                    pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
+                    avail = circularBufferAvailableData(&inBuf->buffer, consumerIds[i]);
+                }
 
-                    if (actuallyRead > 0)
+                if (!inBuf->buffer.recordingActive) 
+                {
+                    recordingStopped = true;
+                    pthread_mutex_unlock(&inBuf->buffer_lock);
+                    break;
+                }
+
+                bool found = false;
+                
+                size_t tail = inBuf->buffer.readerOffset[consumerIds[i]];
+                size_t cap = inBuf->buffer.data_len;
+                uint8_t* rawData = inBuf->buffer.data_ptr;
+
+                // scan byte by byte
+                for (size_t j = 0; j <= avail - FRAME_SIZE; j++) 
+                {
+                    uint8_t b0 = rawData[(tail + j) % cap];
+                    uint8_t b1 = rawData[(tail + j + 1) % cap];
+                    uint8_t b2 = rawData[(tail + j + 2) % cap];
+
+                    if (b0 == HEADER_SYNC_BYTE && (b1 & HEADER_MASK) == HEADER_MATCH) 
                     {
-                        // data comb logic?
-
-
-                        // Write to Output Buffer
-                        pthread_mutex_lock(&outSession->buffer_lock);
-                        size_t space = circularBufferWriterSpace(&outSession->buffer);
-                        if (space >= actuallyRead)
+                        streamMs[i] = ((uint16_t)(b1 & 0x03) << 8) | b2;
+                        
+                        if (j > 0) // discard up to header byte
                         {
-                            circularBufferMemWrite(&outSession->buffer, readPtr, actuallyRead);
-                            circularBufferConfirmWrite(&outSession->buffer, actuallyRead);
-                            pthread_cond_broadcast(&outSession->data_available);
+                            circularBufferConfirmRead(&inBuf->buffer, consumerIds[i], j);
                         }
-                        pthread_mutex_unlock(&outSession->buffer_lock);
-
-                        // Confirm read on Input Buffer
-                        pthread_mutex_lock(&inSessions[i]->buffer_lock);
-                        circularBufferConfirmRead(&inSessions[i]->buffer, consumerIds[i], actuallyRead);
-                        pthread_mutex_unlock(&inSessions[i]->buffer_lock);
+                        
+                        found = true;
+                        break;
                     }
                 }
-                else
+
+                if (!found)
                 {
-                    pthread_mutex_unlock(&inSessions[i]->buffer_lock);
+                    fprintf(stderr, "Processor: CRITICAL - No header found in first %d bytes of stream %d!\n", avail, i);
+                }
+
+                pthread_mutex_unlock(&inBuf->buffer_lock);
+            }
+
+            if (recordingStopped) 
+            {
+                state = STATE_WAITING;
+                continue;
+            }
+
+            // find the highest MS
+            uint16_t targetMs = streamMs[0];
+            for (int i = 1; i < 4; i++) 
+            {
+                int diff = streamMs[i] - targetMs;
+                if (diff < -500) diff += 1000; 
+                if (diff > 500)  diff -= 1000; 
+                
+                if (diff > 0) {
+                    targetMs = streamMs[i]; 
                 }
             }
-        } 
-        // 4. Handle Output End
-        else if (!anyInputActive && outRecordingActive)
+
+            expectedMs = targetMs;
+            state = STATE_PROCESSING;
+        }
+        else if (state == STATE_PROCESSING)
         {
-            pthread_mutex_lock(&outSession->buffer_lock);
-            outSession->buffer.recordingActive = false;
-            outSession->recordingInfo = (DbItem){0};
-            pthread_cond_broadcast(&outSession->data_available);
-            outRecordingActive = false;
-            pthread_mutex_unlock(&outSession->buffer_lock);
-            printf("Processor: All inputs inactive and drained. Stopped recording.\n");
-        } 
-        // 5. Idle Wait
-        else
-        {
-            // No data and no active inputs, sleep briefly to prevent CPU thrashing
-            usleep(10000); 
+            bool recordingActive = true;
+            for (int i = 0; i < 4; i++) 
+            {
+                BufferSession* inBuf = ctx->inputBuffers[i];
+                pthread_mutex_lock(&inBuf->buffer_lock);
+                
+                int avail = circularBufferAvailableData(&inBuf->buffer, consumerIds[i]);
+                
+                // wait for exactly 1 frame
+                while (inBuf->buffer.recordingActive && avail < FRAME_SIZE) 
+                {
+                    pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
+                    avail = circularBufferAvailableData(&inBuf->buffer, consumerIds[i]);
+                }
+                
+                if (!inBuf->buffer.recordingActive) 
+                {
+                    recordingActive = false;
+                }
+                pthread_mutex_unlock(&inBuf->buffer_lock);
+            }
+
+            // If recording stopped, flush reader offsets and signal the output buffer
+            if (!recordingActive) 
+            {
+                for (int i = 0; i < 4; i++) {
+                    pthread_mutex_lock(&ctx->inputBuffers[i]->buffer_lock);
+                    ctx->inputBuffers[i]->buffer.readerOffset[consumerIds[i]] = ctx->inputBuffers[i]->buffer.data_head_offset;
+                    pthread_mutex_unlock(&ctx->inputBuffers[i]->buffer_lock);
+                }
+                
+                if (outBuf != NULL) {
+                    pthread_mutex_lock(&outBuf->buffer_lock);
+                    outBuf->buffer.recordingActive = false;
+                    pthread_cond_broadcast(&outBuf->data_available);
+                    pthread_mutex_unlock(&outBuf->buffer_lock);
+                }
+                
+                state = STATE_WAITING;
+                continue; 
+            }
+
+            float masterArray[TOTAL_CHANNELS] = {0.0f}; 
+            
+            for (int i = 0; i < 4; i++) 
+            {
+                BufferSession* inBuf = ctx->inputBuffers[i];
+                pthread_mutex_lock(&inBuf->buffer_lock);
+                
+                int diff = 0;
+                bool streamHasData = true;
+
+                // fast-forward this specific stream until it is no longer behind
+                while (true) 
+                {
+                    size_t avail = circularBufferAvailableData(&inBuf->buffer, consumerIds[i]);
+                    
+                    if (avail < FRAME_SIZE) {
+                        streamHasData = false;
+                        break; 
+                    }
+
+                    size_t tail = inBuf->buffer.readerOffset[consumerIds[i]];
+                    size_t cap = inBuf->buffer.data_len;
+                    uint8_t* rawData = inBuf->buffer.data_ptr;
+                    
+                    // peek at the ms using modulo
+                    uint8_t b1 = rawData[(tail + 1) % cap];
+                    uint8_t b2 = rawData[(tail + 2) % cap];
+                    uint16_t streamMs = ((uint16_t)(b1 & 0x03) << 8) | b2;
+                    
+                    diff = streamMs - expectedMs;
+                    if (diff < -500) diff += 1000;
+                    if (diff > 500)  diff -= 1000;
+
+                    if (diff < 0) 
+                    {
+                        circularBufferConfirmRead(&inBuf->buffer, consumerIds[i], FRAME_SIZE);
+                    } 
+                    else 
+                    {
+                        break;
+                    }
+                }
+
+                if (!streamHasData || diff > 0) 
+                {
+                    // CASE A: ran out of data trying to catch up (Hardware Lag)
+                    // CASE B: stream is ahead (Dropped Packet)
+                    // ACTION: Do nothing! masterArray remains 0.0f for this stream.
+                    // Do NOT confirm read. We hold this frame for the next master loop.
+                }
+                else if (diff == 0) 
+                {
+                    uint8_t frameBuf[FRAME_SIZE];
+                    size_t tail = inBuf->buffer.readerOffset[consumerIds[i]];
+                    size_t cap = inBuf->buffer.data_len;
+                    uint8_t* rawData = inBuf->buffer.data_ptr;
+                    size_t spaceToEnd = cap - tail;
+                    
+                    if (spaceToEnd >= FRAME_SIZE) {
+                        memcpy(frameBuf, rawData + tail, FRAME_SIZE);
+                    } else {
+                        memcpy(frameBuf, rawData + tail, spaceToEnd);
+                        memcpy(frameBuf + spaceToEnd, rawData, FRAME_SIZE - spaceToEnd);
+                    }
+
+                    int baseIndex = i * CHANNELS_PER_DEV;
+                    uint8_t* payload = frameBuf + HEADER_SIZE;
+
+                    for (int j = 0; j < CHANNELS_PER_DEV; j++) 
+                    {
+                        int byteOffset = j * BYTES_PER_SAMPLE;
+                        uint8_t d0 = payload[byteOffset];
+                        uint8_t d1 = payload[byteOffset + 1];
+                        uint8_t d2 = payload[byteOffset + 2];
+
+                        uint8_t gain = (d0 & 0xC0) >> 6;
+                        uint32_t rawVal = ((uint32_t)(d0 & 0x3F) << 16) | ((uint32_t)d1 << 8) | d2;
+                        uint64_t realVal = (uint64_t)rawVal << (8 * (3 - gain));
+                        
+                        masterArray[baseIndex + j] = (float)realVal;
+                    }
+
+                    // used the, consume
+                    circularBufferConfirmRead(&inBuf->buffer, consumerIds[i], FRAME_SIZE);
+                }
+                
+                pthread_mutex_unlock(&inBuf->buffer_lock);
+            }
+
+            if (outBuf != NULL) 
+            {
+                float outputArray[TOTAL_CHANNELS];
+                // fft shift
+                memcpy(&outputArray[0], &masterArray[512], 512 * sizeof(float));
+                memcpy(&outputArray[512], &masterArray[0], 512 * sizeof(float));
+
+                size_t writeSize = sizeof(outputArray); // 4096 bytes
+                
+                pthread_mutex_lock(&outBuf->buffer_lock);
+                
+                size_t space = circularBufferWriterSpace(&outBuf->buffer);
+                
+                if (space >= writeSize && outBuf->buffer.recordingActive) 
+                {
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)outputArray, writeSize);
+                    circularBufferConfirmWrite(&outBuf->buffer, writeSize);
+                    pthread_cond_broadcast(&outBuf->data_available);
+                }
+                else if (space < writeSize && outBuf->buffer.recordingActive)
+                {
+                    // Drop the output frame to prevent backing up the pipeline
+                    fprintf(stderr, "Processor Warning: Output buffer full! Dropping 1 frame.\n");
+                }
+                
+                pthread_mutex_unlock(&outBuf->buffer_lock);
+            }
+            
+            expectedMs = (expectedMs + 1) % 1000;
         }
     }
 
