@@ -84,6 +84,8 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
                 let endMin = timeToMinutes(window.end);
                 if (endMin < startMin) endMin += 1440;
 
+
+                // slider from https://medium.com/@predragdavidovic10/native-dual-range-slider-html-css-javascript-91e778134816
                 const sliderHTML = `
                 <p><strong>${target.name}</strong> (${target.location}):</p>
                 <div class="range_container">

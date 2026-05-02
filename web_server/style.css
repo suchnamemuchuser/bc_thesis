@@ -211,6 +211,9 @@ button[type="submit"] {
     border: .15rem solid #415a77;
 }
 
+/*slider from https://medium.com/@predragdavidovic10/native-dual-range-slider-html-css-javascript-91e778134816*/
+
+
 .range_container {
     display: flex;
     flex-direction: column;
