@@ -25,7 +25,7 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
 
     const btn = document.getElementById('submit-btn');
     
-    const resultContainer = document.getElementById('result-container');
+    const resultContainer = document.getElementById('visibility');
     const planGraph = document.getElementById('plan-graph');
     const timelineGraph = document.getElementById('timeline-graph');
     
@@ -67,6 +67,8 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
         }
 
         const list = document.getElementById('windows-list');
+        const secVisibility = document.getElementById('visibility');
+        secVisibility.style.display = "block";
         list.innerHTML = "";
 
         const baseDateObj = new Date(processData.date + 'T00:00:00');
@@ -83,7 +85,7 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
                 if (endMin < startMin) endMin += 1440;
 
                 const sliderHTML = `
-                <strong>${target.name}</strong> (${target.location}):
+                <p><strong>${target.name}</strong> (${target.location}):</p>
                 <div class="range_container">
                     <div class="sliders_control">
                         <input class="fromSlider" type="range" value="${startMin}" min="${startMin}" max="${endMin}"/>
@@ -172,7 +174,7 @@ document.getElementById('plan-form').addEventListener('submit', async function(e
         // Use the shared renderer for plan list + timeline.
         await refreshDayPlan(targetDate, planData);
 
-        document.getElementById('result-container').style.display = 'block';
+        document.getElementById('visibility').style.display = 'block';
     }
     catch (error)
     {

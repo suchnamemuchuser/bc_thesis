@@ -9,7 +9,7 @@ $localTz = new DateTimeZone('Europe/Prague');
 
 $dbPath = '/var/lib/rt2/plan.db';
 
-$itemsPerPage = 30;
+$itemsPerPage = 10;
 
 $predefinedTargets = [
     ['name' => 'Sun',      'type' => 'solar', 'enabled' => true],
@@ -23,4 +23,5 @@ $recordingBaseDir = "/var/lib/rt2/data";
 
 $alias = "/data";
 
+$radarField = "../img/latestrt2.jpg";
 ?>
