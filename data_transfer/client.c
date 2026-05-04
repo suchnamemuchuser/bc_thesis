@@ -274,6 +274,15 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
             ctx->customArgs = p_args;
             thread_func = networkProducerThread;
         } 
+        else if (strcmp(func_name, "network_consumer") == 0)
+        {
+            NetworkConsumerArgs* n_args = malloc(sizeof(NetworkConsumerArgs));
+            n_args->port = cJSON_GetObjectItemCaseSensitive(args_json, "port")->valueint;
+            printf("Parsing port: %d\n", cJSON_GetObjectItemCaseSensitive(args_json, "port")->valueint);
+            
+            ctx->customArgs = n_args;
+            thread_func = bufferNetworkConsumerThread;
+        }
         else if (strcmp(func_name, "file_consumer") == 0)
         {
             FileConsumerArgs* c_args = malloc(sizeof(FileConsumerArgs));

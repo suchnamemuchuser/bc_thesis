@@ -74,14 +74,13 @@
             }
         },
         {
-            "id": 5,
-            "description": "Processed data file consumer",
-            "function": "file_consumer",
+            "id": 4,
+            "description": "Network server",
+            "function": "network_consumer",
             "output_buffer": -1,
-            "input_buffers": [2],
+            "input_buffers": [1],
             "args": {
-                "data_dir": "/home/suchname/client",
-                "ext": "dat"
+                "port": 65103
             }
         }
     ]

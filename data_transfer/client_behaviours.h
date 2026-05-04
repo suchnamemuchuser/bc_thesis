@@ -13,6 +13,10 @@ typedef struct {
 } NetworkProducerArgs;
 
 typedef struct {
+    int port;
+} NetworkConsumerArgs;
+
+typedef struct {
     char dataDir[256];
     char ext[64];
 } FileConsumerArgs;
@@ -35,5 +39,6 @@ typedef struct {
 void* networkProducerThread(void* arg);
 void* fileConsumerThread(void* arg);
 void* dataProcessorThread(void* arg);
+void* bufferNetworkConsumerThread(void* arg);
 
 #endif // CLIENT_BEHAVIOURS_H
