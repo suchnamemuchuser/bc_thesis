@@ -392,6 +392,16 @@ document.addEventListener('DOMContentLoaded', () => {
             refreshDayPlan(selectedDate).catch(error => {
                 console.error("Failed to refresh day plan for new date:", error);
             });
+
+            const windowsList = document.getElementById('windows-list');
+            if (windowsList) {
+                windowsList.innerHTML = '';
+            }
+
+            const secVisibility = document.getElementById('visibility');
+            if (secVisibility) {
+                secVisibility.style.display = 'none'; 
+            }
         }
     });
 });
