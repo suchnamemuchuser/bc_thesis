@@ -764,8 +764,8 @@ void* dataProcessorThread(void* arg)
                     }
 
                     // swap halves
-                    memcpy(&processedData[i * SAMPLES_PER_MS], &oneStreamSample[SAMPLES_PER_MS / 2], 512);
-                    memcpy(&processedData[(i * SAMPLES_PER_MS) + 512], oneStreamSample, 512);
+                    memcpy(&processedData[i * SAMPLES_PER_MS], &oneStreamSample[SAMPLES_PER_MS / 2], (SAMPLES_PER_MS / 2) * sizeof(uint64_t));
+                    memcpy(&processedData[(i * SAMPLES_PER_MS) + (SAMPLES_PER_MS / 2)], oneStreamSample, (SAMPLES_PER_MS / 2) * sizeof(uint64_t));
                 } // else skip, buffer is zeroed out
             }
 
@@ -775,7 +775,7 @@ void* dataProcessorThread(void* arg)
             {
                 pthread_mutex_unlock(&outBuf->buffer_lock);
                 // write outside of lock
-                circularBufferMemWrite(&outBuf->buffer, (uint8_t*)msFromStart, sizeof(msFromStart)); // write ms first
+                circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&msFromStart, sizeof(msFromStart)); // write ms first
                 circularBufferMemWrite(&outBuf->buffer, (uint8_t*)processedData, sizeof(processedData)); // then processed data
                 pthread_mutex_lock(&outBuf->buffer_lock);
                 circularBufferConfirmWrite(&outBuf->buffer, sizeof(processedData) + sizeof(msFromStart));
@@ -783,7 +783,7 @@ void* dataProcessorThread(void* arg)
             }
             pthread_mutex_unlock(&outBuf->buffer_lock);
 
-            for (int i = 0 ; i < 4 ; i++)
+            for (int i = 0 ; i < 4 ; i++) // update all streams ms, check for end of recording
             {
                 if(getValidMillisecond(ctx->inputBuffers[i], consumerIds[i], streamMilliseconds[i]) == -1)
                 {
@@ -794,7 +794,7 @@ void* dataProcessorThread(void* arg)
         // some buffer ended
 
         // set output to no recording
-        pthread_mutex_unlock(&outBuf->buffer_lock);
+        pthread_mutex_lock(&outBuf->buffer_lock);
         outBuf->buffer.recordingActive = false;
         pthread_cond_broadcast(&outBuf->data_available);
         pthread_mutex_unlock(&outBuf->buffer_lock);
