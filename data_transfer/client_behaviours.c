@@ -689,7 +689,133 @@ void* oldDataProcessorThread(void* arg)
 
 void* dataProcessorThread(void* arg)
 {
+    ClientContext* ctx = (ClientContext*) arg;
+    BufferSession* masterBuf = ctx->inputBuffers[0];
+    BufferSession* outBuf = ctx->outputBuffer;
 
+    uint64_t msFromStart; // overall counter of milliseconds for each recording
+    int currentMs = 10000;
+
+    uint64_t processedData[4 * sizeof(uint64_t) * SAMPLES_PER_MS];
+    uint64_t oneStreamSample[sizeof(uint64_t) * SAMPLES_PER_MS];
+    int startMilliseconds[4];
+    uint8_t streamMilliseconds[4][BYTES_PER_MS];
+    int consumerIds[4];
+
+    for (int i = 0 ; i < 4 ; i++) // register for all input buffers
+    {
+        pthread_mutex_lock(&ctx->inputBuffers[i]->buffer_lock);
+        
+        consumerIds[i] = ctx->inputBuffers[i]->buffer.reader_cnt;
+        ctx->inputBuffers[i]->buffer.readerOffset[consumerIds[i]] = ctx->inputBuffers[i]->buffer.data_head_offset;
+        ctx->inputBuffers[i]->buffer.reader_cnt++;
+        
+        pthread_mutex_unlock(&ctx->inputBuffers[i]->buffer_lock);
+    }
+
+    while (true) // master recordings loop
+    {
+        // Wait for recording to start
+        pthread_mutex_lock(&masterBuf->buffer_lock);
+        while(!masterBuf->buffer.recordingActive)
+        {
+            pthread_cond_wait(&masterBuf->data_available, &masterBuf->buffer_lock);
+        }
+        // copy recording info from master
+        DbItem recording = masterBuf->recordingInfo;
+        pthread_mutex_unlock(&masterBuf->buffer_lock);
+        
+        // into output
+        pthread_mutex_lock(&outBuf->buffer_lock);
+        outBuf->recordingInfo = recording;
+        pthread_mutex_unlock(&outBuf->buffer_lock);
+
+        // reset recording ms counter
+        msFromStart = 0;
+
+        // get starting milliseconds for each
+        for (int i = 0 ; i < ctx->inputBufferCount ; i++)
+        {
+            getValidMillisecond(ctx->inputBuffers[i], consumerIds[i], streamMilliseconds[i]);
+            startMilliseconds[i] = (streamMilliseconds[i][1] & 0x03) << 8 | streamMilliseconds[i][2];
+        }
+
+        // get starting ms
+        currentMs = getEarliestMs(startMilliseconds, 4);
+
+        bool allBuffersActive = true;
+
+        while (allBuffersActive)
+        {
+            bzero(processedData, sizeof(processedData));
+
+            for (int i = 0 ; i < 4 ; i++)
+            {
+                if (((streamMilliseconds[i][1] & 0x03) << 8 | streamMilliseconds[i][2]) == currentMs)
+                {
+                    // loop through and process, add to output buffer
+                    for (int j = 3 ; j < BYTES_PER_MS ; j+=3)
+                    {
+                        uint8_t gain = (streamMilliseconds[i][j] & (uint8_t)GAIN_MASK) >> 6;
+                        uint32_t rawVal = ((uint32_t)(streamMilliseconds[i][j] & (uint8_t)DATA_MASK) << 16) + ((uint32_t)streamMilliseconds[i][j+1] << 8) + (uint32_t)streamMilliseconds[i][j+2];
+                        uint64_t realVal = (uint64_t)rawVal << (8*(3-gain));
+
+                        oneStreamSample[j/3 - 1] = realVal; // /3 because j iterates by three, -1 because it skips header bytes
+                    }
+
+                    // swap halves
+                    memcpy(&processedData[i * SAMPLES_PER_MS], &oneStreamSample[SAMPLES_PER_MS / 2], 512);
+                    memcpy(&processedData[(i * SAMPLES_PER_MS) + 512], oneStreamSample, 512);
+                } // else skip, buffer is zeroed out
+            }
+
+            // check if space in output buffer andwrite
+            pthread_mutex_lock(&outBuf->buffer_lock);
+            if (circularBufferWriterSpace(&outBuf->buffer) > sizeof(processedData) + sizeof(msFromStart)) // space for overall ms
+            {
+                pthread_mutex_unlock(&outBuf->buffer_lock);
+                // write outside of lock
+                circularBufferMemWrite(&outBuf->buffer, (uint8_t*)msFromStart, sizeof(msFromStart)); // write ms first
+                circularBufferMemWrite(&outBuf->buffer, (uint8_t*)processedData, sizeof(processedData)); // then processed data
+                pthread_mutex_lock(&outBuf->buffer_lock);
+                circularBufferConfirmWrite(&outBuf->buffer, sizeof(processedData) + sizeof(msFromStart));
+                pthread_cond_broadcast(&outBuf->data_available);
+            }
+            pthread_mutex_unlock(&outBuf->buffer_lock);
+
+            for (int i = 0 ; i < 4 ; i++)
+            {
+                if(getValidMillisecond(ctx->inputBuffers[i], consumerIds[i], streamMilliseconds[i]) == -1)
+                {
+                    allBuffersActive = false;
+                }
+            }
+        } 
+        // some buffer ended
+
+        // set output to no recording
+        pthread_mutex_unlock(&outBuf->buffer_lock);
+        outBuf->buffer.recordingActive = false;
+        pthread_cond_broadcast(&outBuf->data_available);
+        pthread_mutex_unlock(&outBuf->buffer_lock);
+
+        bool someBufferHasData = true;
+        while (someBufferHasData)
+        {
+            someBufferHasData = false;
+            for (int i = 0 ; i < 4 ; i++) // drain all buffers
+            {
+                pthread_mutex_lock(&ctx->inputBuffers[i]->buffer_lock);
+                if (ctx->inputBuffers[i]->buffer.recordingActive) someBufferHasData = true;
+                int data = circularBufferAvailableData(&ctx->inputBuffers[i]->buffer, consumerIds[i]);
+                if (data != 0) circularBufferConfirmRead(&ctx->inputBuffers[i]->buffer, consumerIds[i], data);
+                pthread_mutex_unlock(&ctx->inputBuffers[i]->buffer_lock);
+            }
+        }
+
+    } // end of master recordings loop
+
+    return NULL;
 }
 
 void* bufferNetworkConsumerThread(void* arg)
