@@ -74,6 +74,8 @@ int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuff
 
 static inline uint8_t peekByte(CircularBuffer* buf, int consumerId, size_t offset);
 
+int getEarliestMs(int *streamMs, int streamCount);
+
 void* networkProducerThread(void* arg){
     ClientContext* ctx = (ClientContext*) arg;
     NetworkProducerArgs* args = (NetworkProducerArgs*) ctx->customArgs;
@@ -376,7 +378,7 @@ void* bufferFileConsumerThread(void* arg)
     return NULL;
 }
 
-void* dataProcessorThread(void* arg)
+void* oldDataProcessorThread(void* arg)
 {
     ClientContext* ctx = (ClientContext*) arg;
     BufferSession* masterBuf = ctx->inputBuffers[0];
@@ -683,6 +685,11 @@ void* dataProcessorThread(void* arg)
     }
 
     return NULL;
+}
+
+void* dataProcessorThread(void* arg)
+{
+
 }
 
 void* bufferNetworkConsumerThread(void* arg)
@@ -1087,6 +1094,52 @@ int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuff
 static inline uint8_t peekByte(CircularBuffer* buf, int consumerId, size_t offset)
 {
     return buf->data_ptr[(buf->readerOffset[consumerId] + offset) % buf->data_len];
+}
+
+static int compareMs(const void *a, const void *b)
+{
+    return (*(const int *)a - *(const int *)b);
+}
+
+int getEarliestMs(int *streamMs, int streamCount)
+{
+    if (streamCount <= 0) return -1; 
+    if (streamCount == 1) return streamMs[0];
+
+    // sort timestamps
+    qsort(streamMs, streamCount, sizeof(int), compareMs);
+
+    int maxGap = -1;
+    int startMs = streamMs[0];
+
+    // find largest gap
+    for (int i = 0; i < streamCount; i++)
+    {
+        int gap;
+        int candidateStart;
+
+        if (i == streamCount - 1)
+        {
+            // wrap-around gap (from last to first)
+            gap = (1000 - streamMs[i]) + streamMs[0];
+            candidateStart = streamMs[0];
+        }
+        else
+        {
+            // standart gap
+            gap = streamMs[i + 1] - streamMs[i];
+            candidateStart = streamMs[i + 1];
+        }
+
+        // earliest is following biggest gap
+        if (gap > maxGap)
+        {
+            maxGap = gap;
+            startMs = candidateStart;
+        }
+    }
+
+    return startMs;
 }
 
 #endif
