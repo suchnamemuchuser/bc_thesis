@@ -38,6 +38,26 @@
 #define BATCH_SIZE_MS    10 
 #define READ_CHUNK_SIZE  (FRAME_SIZE * BATCH_SIZE_MS)
 
+
+
+
+
+#define HEADER  0xAA
+#define H_MASK  0xFC
+#define H_MATCH 0x80
+#define GAIN_MASK 0xC0
+#define DATA_MASK 0x3F
+
+#define SAMPLES_PER_MS 1024
+#define BYTES_PER_MS 3075
+
+
+
+
+
+
+
+
 typedef enum {
     STATE_WAITING,
     STATE_SYNCING,
@@ -49,6 +69,10 @@ ssize_t recvExact(int sockfd, void *buf, size_t len);
 void recursiveMkdir(const char *path);
 
 int sendall(int sockfd, const uint8_t *buf, size_t len);
+
+int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuffer);
+
+static inline uint8_t peekByte(CircularBuffer* buf, int consumerId, size_t offset);
 
 void* networkProducerThread(void* arg){
     ClientContext* ctx = (ClientContext*) arg;
@@ -969,6 +993,100 @@ void recursiveMkdir(const char *path) {
         }
     }
     mkdir(tmp, S_IRWXU); // Create final level
+}
+
+int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuffer)
+{
+    while (true)
+    {
+        pthread_mutex_lock(&session->buffer_lock);
+
+        // wait for 10 ms of data
+        int availableData = circularBufferAvailableData(&session->buffer, consumerId);
+        while (session->buffer.recordingActive && availableData < (10 * BYTES_PER_MS))
+        {
+            pthread_cond_wait(&session->data_available, &session->buffer_lock);
+            availableData = circularBufferAvailableData(&session->buffer, consumerId);
+        }
+
+        // recording stopped, end data processing
+        if (!session->buffer.recordingActive)
+        {
+            pthread_mutex_unlock(&session->buffer_lock);
+            return -1; 
+        }
+        pthread_mutex_unlock(&session->buffer_lock);
+
+        size_t searchPos = 0;
+        bool found = false;
+
+        // scan for h1 and h2
+        // stop at 8 ms, dont risk going over
+        while (searchPos < (8 * BYTES_PER_MS))
+        {
+            uint8_t h1_b1 = peekByte(&session->buffer, consumerId, searchPos);
+            uint8_t h1_b2 = peekByte(&session->buffer, consumerId, searchPos + 1);
+
+            // match first header and second byte mask
+            if (h1_b1 == HEADER && (h1_b2 & H_MASK) == H_MATCH)
+            {
+                
+                // match h2 offset by BYTES_PER_MS
+                uint8_t h2_b1 = peekByte(&session->buffer, consumerId, searchPos + BYTES_PER_MS);
+                uint8_t h2_b2 = peekByte(&session->buffer, consumerId, searchPos + BYTES_PER_MS + 1);
+
+                if (h2_b1 == HEADER && (h2_b2 & H_MASK) == H_MATCH)
+                {
+                    
+                    // found: throw away up to h1
+                    if (searchPos > 0)
+                    {
+                        pthread_mutex_lock(&session->buffer_lock);
+                        circularBufferConfirmRead(&session->buffer, consumerId, searchPos);
+                        pthread_mutex_unlock(&session->buffer_lock);
+                    }
+
+                    // copy
+                    uint8_t* ptr;
+                    int readLen = circularBufferReadData(&session->buffer, consumerId, BYTES_PER_MS, &ptr);
+                    memcpy(outBuffer, ptr, readLen);
+
+                    // was at end of buffer, split read
+                    if (readLen < BYTES_PER_MS)
+                    {
+                        // confirm first read
+                        int firstPart = readLen;
+                        pthread_mutex_lock(&session->buffer_lock);
+                        circularBufferConfirmRead(&session->buffer, consumerId, firstPart);
+                        pthread_mutex_unlock(&session->buffer_lock);
+
+                        // read rest
+                        circularBufferReadData(&session->buffer, consumerId, BYTES_PER_MS - firstPart, &ptr);
+                        memcpy(outBuffer + firstPart, ptr, BYTES_PER_MS - firstPart);
+                        readLen = BYTES_PER_MS - firstPart;
+                    }
+
+                    // confirm rest / whole
+                    pthread_mutex_lock(&session->buffer_lock);
+                    circularBufferConfirmRead(&session->buffer, consumerId, readLen);
+                    pthread_mutex_unlock(&session->buffer_lock);
+                    
+                    return 1;
+                }
+            }
+            searchPos++;
+        }
+
+        // no ms found in 8 ms, flush all and continue loop
+        pthread_mutex_lock(&session->buffer_lock);
+        circularBufferConfirmRead(&session->buffer, consumerId, 8 * BYTES_PER_MS);
+        pthread_mutex_unlock(&session->buffer_lock);
+    }
+}
+
+static inline uint8_t peekByte(CircularBuffer* buf, int consumerId, size_t offset)
+{
+    return buf->data_ptr[(buf->readerOffset[consumerId] + offset) % buf->data_len];
 }
 
 #endif
