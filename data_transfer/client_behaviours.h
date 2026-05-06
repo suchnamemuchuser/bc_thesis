@@ -21,6 +21,11 @@ typedef struct {
     char ext[64];
 } FileConsumerArgs;
 
+typedef struct {
+    char dataDir[256];
+    char sourceImagePath[256];
+} ImageArchiverArgs;
+
 
 // This is the single void* passed to EVERY thread
 typedef struct {

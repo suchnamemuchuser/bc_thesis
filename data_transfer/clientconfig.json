@@ -96,6 +96,17 @@
             "input_buffers": [2],
             "args": {
             }
+        },
+        {
+            "id": 7,
+            "description": "Copies the radar field image",
+            "function": "image_archiver",
+            "output_buffer": -1,
+            "input_buffers": [0],
+            "args": {
+                "source_image_path": "/var/www/html/telescope_live.png",
+                "output_dir": "/home/suchname/client"
+            }
         }
     ]
 }

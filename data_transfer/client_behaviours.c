@@ -16,6 +16,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "NetworkProtocol.h"
+#include <fcntl.h>
+#include <sys/sendfile.h>
+#include <time.h>
 
 #define RECONNECT_DELAY_SECONDS 5
 
@@ -43,6 +46,8 @@ int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuff
 static inline uint8_t peekByte(CircularBuffer* buf, int consumerId, size_t offset);
 
 int getEarliestMs(int *streamMs, int streamCount);
+
+void copyImageWithTimestamp(const char* sourcePath, const char* baseDataDir, const char* objectName, time_t eventTime);
 
 void* networkProducerThread(void* arg){
     ClientContext* ctx = (ClientContext*) arg;
@@ -896,6 +901,58 @@ void* dataAveragerThread(void* arg)
     return NULL;
 }
 
+void* imageArchiverThread(void* arg)
+{
+    ClientContext* ctx = (ClientContext*) arg;
+    ImageArchiverArgs* args = (ImageArchiverArgs*) ctx->customArgs;
+    BufferSession* inBuf = ctx->inputBuffers[0];
+
+    bool wasRecording = false;
+    time_t lastHourlySaveTime = 0;
+    
+    DbItem currentRecInfo; 
+
+    printf("Image archiver thread started. Polling every 1 second.\n");
+
+    while (true)
+    {
+        pthread_mutex_lock(&inBuf->buffer_lock);
+        bool isRecording = inBuf->buffer.recordingActive;
+        if (isRecording) {
+            currentRecInfo = inBuf->recordingInfo; 
+        }
+        pthread_mutex_unlock(&inBuf->buffer_lock);
+
+        time_t now = time(NULL);
+
+        if (isRecording && !wasRecording) // recording started
+        {
+            time_t startTime = (time_t)currentRecInfo.rec_start_time;
+            copyImageWithTimestamp(args->sourceImagePath, args->dataDir, currentRecInfo.object_name, startTime);
+            
+            lastHourlySaveTime = now;
+        }
+        else if (!isRecording && wasRecording) // recording ended
+        {
+            copyImageWithTimestamp(args->sourceImagePath, args->dataDir, currentRecInfo.object_name, now);
+        }
+        else if (isRecording && wasRecording)
+        {
+            if (now - lastHourlySaveTime >= 3600) // hour passed, save img
+            {
+                copyImageWithTimestamp(args->sourceImagePath, args->dataDir, currentRecInfo.object_name, now);
+                
+                lastHourlySaveTime = now;
+            }
+        }
+
+        wasRecording = isRecording;
+        sleep(1);
+    }
+
+    return NULL;
+}
+
 ssize_t recvExact(int sockfd, void *buf, size_t len)
 {
     size_t total_received = 0;
@@ -1102,6 +1159,48 @@ int getEarliestMs(int *streamMs, int streamCount)
     }
 
     return startMs;
+}
+
+void copyImageWithTimestamp(const char* sourcePath, const char* baseDataDir, const char* objectName, time_t eventTime)
+{
+    char dirPath[512];
+    char filePath[1024];
+    char timeStr[64];
+    struct tm timeInfo;
+
+    localtime_r(&eventTime, &timeInfo);
+    strftime(timeStr, sizeof(timeStr), "%Y.%m.%d-%H:%M", &timeInfo);
+
+    // Build the directory path and create it
+    snprintf(dirPath, sizeof(dirPath), "%s/%s", baseDataDir, objectName);
+    recursiveMkdir(dirPath);
+
+    // Build the final file path (e.g., /data/Target_A/2026.03.29-06:24_start.png)
+    snprintf(filePath, sizeof(filePath), "%s/%s.png", dirPath, timeStr);
+
+    // Open source
+    int source_fd = open(sourcePath, O_RDONLY);
+    if (source_fd < 0) {
+        perror("Archiver: Failed to open source image");
+        return;
+    }
+
+    // Open destination
+    int dest_fd = open(filePath, O_WRONLY | O_CREAT | O_TRUNC, 0666);
+    if (dest_fd < 0) {
+        perror("Archiver: Failed to create destination image");
+        close(source_fd);
+        return;
+    }
+
+    // Get file size and copy via kernel
+    struct stat stat_buf;
+    fstat(source_fd, &stat_buf);
+    sendfile(dest_fd, source_fd, NULL, stat_buf.st_size);
+
+    close(source_fd);
+    close(dest_fd);
+    printf("Archiver: Saved image %s\n", filePath);
 }
 
 #endif
