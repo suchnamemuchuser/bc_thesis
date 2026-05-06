@@ -790,6 +790,10 @@ void* dataProcessorThread(void* arg)
                     allBuffersActive = false;
                 }
             }
+
+            // update milliseconds
+            msFromStart++;
+            currentMs = (currentMs + 1) % 1000;
         } 
         // some buffer ended
 
