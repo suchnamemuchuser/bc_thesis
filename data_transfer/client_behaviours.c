@@ -696,8 +696,8 @@ void* dataProcessorThread(void* arg)
     uint64_t msFromStart; // overall counter of milliseconds for each recording
     int currentMs = 10000;
 
-    uint64_t processedData[4 * sizeof(uint64_t) * SAMPLES_PER_MS];
-    uint64_t oneStreamSample[sizeof(uint64_t) * SAMPLES_PER_MS];
+    uint64_t processedData[4 * SAMPLES_PER_MS];
+    uint64_t oneStreamSample[SAMPLES_PER_MS];
     int startMilliseconds[4];
     uint8_t streamMilliseconds[4][BYTES_PER_MS];
     int consumerIds[4];
@@ -785,6 +785,8 @@ void* dataProcessorThread(void* arg)
 
             for (int i = 0 ; i < 4 ; i++) // update all streams ms, check for end of recording
             {
+
+
                 if(getValidMillisecond(ctx->inputBuffers[i], consumerIds[i], streamMilliseconds[i]) == -1)
                 {
                     allBuffersActive = false;
