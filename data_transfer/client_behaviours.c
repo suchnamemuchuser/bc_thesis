@@ -785,7 +785,9 @@ void* dataProcessorThread(void* arg)
 
             for (int i = 0 ; i < 4 ; i++) // update all streams ms, check for end of recording
             {
+                int streamMs = (streamMilliseconds[i][1] & 0x03) << 8 | streamMilliseconds[i][2];
 
+                if (streamMs != currentMs) continue; // dont update streams which are ahead
 
                 if(getValidMillisecond(ctx->inputBuffers[i], consumerIds[i], streamMilliseconds[i]) == -1)
                 {
