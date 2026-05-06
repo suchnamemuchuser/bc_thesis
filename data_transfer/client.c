@@ -297,6 +297,11 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
             ctx->customArgs = NULL;
             thread_func = dataProcessorThread;
         }
+        else if (strcmp(func_name, "data_averager") == 0)
+        {
+            ctx->customArgs = NULL;
+            thread_func = dataProcessorThread;
+        }
         else
         {
             fprintf(stderr, "Unknown function: %s\n", func_name);

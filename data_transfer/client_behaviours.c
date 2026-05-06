@@ -30,6 +30,7 @@
 
 #define SAMPLES_PER_MS 1024
 #define BYTES_PER_MS 3075
+#define PROCESSED_BYTES_PER_MS (4 * SAMPLES_PER_MS * sizeof(uint64_t) + sizeof(uint64_t)) // + overall ms timestamp
 
 ssize_t recvExact(int sockfd, void *buf, size_t len);
 
@@ -386,6 +387,7 @@ void* dataProcessorThread(void* arg)
         // into output
         pthread_mutex_lock(&outBuf->buffer_lock);
         outBuf->recordingInfo = recording;
+        outBuf->buffer.recordingActive = true;
         pthread_mutex_unlock(&outBuf->buffer_lock);
 
         // reset recording ms counter
@@ -728,6 +730,172 @@ void* bufferNetworkConsumerThread(void* arg)
     return NULL;
 }
 
+void* dataAveragerThread(void* arg)
+{
+    ClientContext* ctx = (ClientContext*) arg;
+    BufferSession* inBuf = ctx->inputBuffers[0];
+    BufferSession* outBuf = ctx->outputBuffer;
+
+    uint64_t oneSecond[4 * SAMPLES_PER_MS];
+    uint64_t inputSecond[4 * SAMPLES_PER_MS + 1]; // [0] is ms timestamp, [1...] is data
+
+    uint64_t currentSecond;
+
+    bool threadRecordingActive = false;
+    size_t readLen; 
+    uint8_t* readPtr;
+    uint32_t recordingMs;
+
+    // Register for input buffer
+    pthread_mutex_lock(&inBuf->buffer_lock);
+    int consumerId = inBuf->buffer.reader_cnt;
+    inBuf->buffer.readerOffset[consumerId] = inBuf->buffer.data_head_offset;
+    inBuf->buffer.reader_cnt++;
+    pthread_mutex_unlock(&inBuf->buffer_lock);
+
+    printf("Client %d registered with buffer %d.\n", ctx->clientId, inBuf->bufferId);
+
+    while (true) // Loop for all recordings
+    {
+        // Wait for recording to start
+        pthread_mutex_lock(&inBuf->buffer_lock);
+        while (!inBuf->buffer.recordingActive)
+        {
+            pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
+        }
+        // Copy recording info and set output as active
+        DbItem recording = inBuf->recordingInfo;
+        pthread_mutex_unlock(&inBuf->buffer_lock);
+
+        pthread_mutex_lock(&outBuf->buffer_lock);
+        outBuf->recordingInfo = recording;
+        outBuf->buffer.recordingActive = true;
+        pthread_mutex_unlock(&outBuf->buffer_lock);
+
+        // Recording started
+        threadRecordingActive = true;
+        recordingMs = 0;
+
+        int availableData;
+        while (threadRecordingActive)
+        {
+            // Wait for 1 ms of data or end of recording
+            pthread_mutex_lock(&inBuf->buffer_lock);
+            while ((availableData = circularBufferAvailableData(&inBuf->buffer, consumerId)) < PROCESSED_BYTES_PER_MS && inBuf->buffer.recordingActive)
+            {
+                pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
+            }
+
+            if (!inBuf->buffer.recordingActive && availableData < PROCESSED_BYTES_PER_MS)
+            {
+                // Recording ended and we don't have enough data for a full ms
+                pthread_mutex_unlock(&inBuf->buffer_lock);
+                threadRecordingActive = false;
+                break;
+            }
+
+            readLen = circularBufferReadData(&inBuf->buffer, consumerId, PROCESSED_BYTES_PER_MS, &readPtr);
+            pthread_mutex_unlock(&inBuf->buffer_lock);
+
+            // Need to copy out because uint64 can be split across buffer bounds
+            memcpy(inputSecond, readPtr, readLen);
+
+            if(readLen < PROCESSED_BYTES_PER_MS) // Split read (wrap around)
+            {
+                int firstPart = readLen;
+                int remainingBytes = PROCESSED_BYTES_PER_MS - firstPart;
+
+                pthread_mutex_lock(&inBuf->buffer_lock);
+                circularBufferConfirmRead(&inBuf->buffer, consumerId, firstPart);
+                
+                circularBufferReadData(&inBuf->buffer, consumerId, remainingBytes, &readPtr);
+                
+                pthread_mutex_unlock(&inBuf->buffer_lock);
+                
+                memcpy((uint8_t*)inputSecond + firstPart, readPtr, remainingBytes);
+
+                readLen = remainingBytes; 
+            }
+
+            // (If split, this confirms `remainingBytes`. If not, it confirms the full `PROCESSED_BYTES_PER_MS`)
+            pthread_mutex_lock(&inBuf->buffer_lock);
+            circularBufferConfirmRead(&inBuf->buffer, consumerId, readLen);
+            pthread_mutex_unlock(&inBuf->buffer_lock);
+
+            // If ms == 0, zero out our accumulation buffer
+            if (recordingMs == 0)
+            {
+                bzero(oneSecond, sizeof(oneSecond));
+
+                // Calculate the timestamp in seconds (msFromStart is inputSecond[0])
+                currentSecond = inputSecond[0] / 1000;
+            }
+
+            // Accumulate the 1ms data (offset by 1 because index 0 is the ms timestamp)
+            for (int i = 0; i < 4 * SAMPLES_PER_MS; i++)
+            {
+                oneSecond[i] += inputSecond[i + 1];
+            }
+
+            recordingMs++;
+
+            // If we have aggregated a full second (1000 ms)
+            if (recordingMs == 1000)
+            {
+                // Divide to get the average
+                for (int i = 0; i < 4 * SAMPLES_PER_MS; i++)
+                {
+                    oneSecond[i] /= 1000;
+                }
+
+                // Write to output buffer
+                pthread_mutex_lock(&outBuf->buffer_lock);
+                if (circularBufferWriterSpace(&outBuf->buffer) > sizeof(oneSecond) + sizeof(currentSecond)) 
+                {
+                    pthread_mutex_unlock(&outBuf->buffer_lock);
+                    
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&currentSecond, sizeof(currentSecond));
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)oneSecond, sizeof(oneSecond));
+                    
+                    pthread_mutex_lock(&outBuf->buffer_lock);
+                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(oneSecond) + sizeof(currentSecond));
+                    pthread_cond_broadcast(&outBuf->data_available);
+                }
+                pthread_mutex_unlock(&outBuf->buffer_lock);
+
+                // Reset for the next second block
+                recordingMs = 0;
+            }
+        } // End of recording active loop
+
+        // Recording ended - Set output to no recording
+        pthread_mutex_lock(&outBuf->buffer_lock);
+        outBuf->buffer.recordingActive = false;
+        pthread_cond_broadcast(&outBuf->data_available);
+        pthread_mutex_unlock(&outBuf->buffer_lock);
+
+        // Drain any remaining data in the input buffer
+        bool inBufHasData = true;
+        while (inBufHasData)
+        {
+            inBufHasData = false;
+            pthread_mutex_lock(&inBuf->buffer_lock);
+            
+            if (inBuf->buffer.recordingActive) inBufHasData = true;
+            
+            int data = circularBufferAvailableData(&inBuf->buffer, consumerId);
+            if (data != 0) 
+            {
+                circularBufferConfirmRead(&inBuf->buffer, consumerId, data);
+            }
+            pthread_mutex_unlock(&inBuf->buffer_lock);
+        }
+
+    } // End of master recordings loop
+
+    return NULL;
+}
+
 ssize_t recvExact(int sockfd, void *buf, size_t len)
 {
     size_t total_received = 0;
@@ -847,7 +1015,9 @@ int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuff
 
                     // copy
                     uint8_t* ptr;
+                    pthread_mutex_lock(&session->buffer_lock);
                     int readLen = circularBufferReadData(&session->buffer, consumerId, BYTES_PER_MS, &ptr);
+                    pthread_mutex_unlock(&session->buffer_lock);
                     memcpy(outBuffer, ptr, readLen);
 
                     // was at end of buffer, split read
@@ -857,10 +1027,10 @@ int getValidMillisecond(BufferSession* session, int consumerId, uint8_t* outBuff
                         int firstPart = readLen;
                         pthread_mutex_lock(&session->buffer_lock);
                         circularBufferConfirmRead(&session->buffer, consumerId, firstPart);
-                        pthread_mutex_unlock(&session->buffer_lock);
-
+                        
                         // read rest
                         circularBufferReadData(&session->buffer, consumerId, BYTES_PER_MS - firstPart, &ptr);
+                        pthread_mutex_unlock(&session->buffer_lock);
                         memcpy(outBuffer + firstPart, ptr, BYTES_PER_MS - firstPart);
                         readLen = BYTES_PER_MS - firstPart;
                     }

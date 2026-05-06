@@ -3,18 +3,23 @@
     "buffers": [
         {
             "id": 0,
-            "size": 46080000,
+            "size": 184500000,
             "description": "raw data rt1"
         },
         {
             "id": 1,
-            "size": 46080000,
+            "size": 184500000,
             "description": "raw data rt2"
         },
         {
             "id": 2,
-            "size": 46080000,
-            "description": "combined data"
+            "size": 40970000,
+            "description": "10 sec of processed data"
+        },
+        {
+            "id": 3,
+            "size": 19665600,
+            "description": "10 min of 1:1000 averaged data"
         }
     ],
     "clients": [
@@ -74,13 +79,22 @@
             }
         },
         {
-            "id": 4,
+            "id": 5,
             "description": "Network server",
             "function": "network_consumer",
             "output_buffer": -1,
             "input_buffers": [1],
             "args": {
                 "port": 65103
+            }
+        },
+        {
+            "id": 6,
+            "description": "1:1000 averager",
+            "function": "data_averager",
+            "output_buffer": 3,
+            "input_buffers": [2],
+            "args": {
             }
         }
     ]

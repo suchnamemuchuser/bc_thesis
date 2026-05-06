@@ -40,5 +40,6 @@ void* networkProducerThread(void* arg);
 void* fileConsumerThread(void* arg);
 void* dataProcessorThread(void* arg);
 void* bufferNetworkConsumerThread(void* arg);
+void* dataAveragerThread(void* arg);
 
 #endif // CLIENT_BEHAVIOURS_H
