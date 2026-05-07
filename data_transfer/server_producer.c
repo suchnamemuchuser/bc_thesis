@@ -11,7 +11,7 @@
 
 #include <libftdi1/ftdi.h>
 
-#define PROD_BUF_SIZ 900
+#define PROD_BUF_SIZ 3075
 #define FTDI_BUF_LEN 16384
 #define FTDI_VENDOR 0x0403
 #define FTDI_PRODUCT 0x6014
@@ -25,22 +25,34 @@ void run_dummy_producer(BufferSession* bufferSession)
         exit(1);
     }
 
-    const char* pattern = "ABCD";
-    size_t patternLen = 4;
-    size_t i = 0;
+    // make payload
+    for (int i = 0; i < 1024; i++)
+    {
+        // gain changes every 256 samples: 0, 1, 2, 3
+        uint8_t gain = i / 256; 
+        
+        // values go 10000, 10001, 10002...
+        uint32_t raw_val = 10000 + i; 
 
-    while (i + patternLen <= PROD_BUF_SIZ)
-    {
-        memcpy(dataBuffer + i, pattern, patternLen);
-        i += patternLen;
-    }
-    if (i < PROD_BUF_SIZ)
-    {
-        memcpy(dataBuffer + i, pattern, PROD_BUF_SIZ - i);
+        size_t offset = 3 + (i * 3);
+        
+        dataBuffer[offset] = ((gain & 0x03) << 6) | ((raw_val >> 16) & 0x3F);
+        dataBuffer[offset + 1] = (raw_val >> 8) & 0xFF;
+        dataBuffer[offset + 2] = raw_val & 0xFF;
     }
 
     while(true)
     {
+        // get current time
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        uint16_t current_ms = tv.tv_usec / 1000;
+
+        // write Header
+        dataBuffer[0] = 0xAA;
+        dataBuffer[1] = 0x80 | ((current_ms >> 8) & 0x03);
+        dataBuffer[2] = current_ms & 0xFF;
+
         pthread_mutex_lock(&bufferSession->buffer_lock);
 
         if (bufferSession->buffer.recordingActive == true)
@@ -49,6 +61,7 @@ void run_dummy_producer(BufferSession* bufferSession)
 
             if (space >= (size_t)PROD_BUF_SIZ)
             {
+                // Unlock while copying data into the buffer memory to keep mutex free
                 pthread_mutex_unlock(&bufferSession->buffer_lock);
                 circularBufferMemWrite(&bufferSession->buffer, dataBuffer, PROD_BUF_SIZ);
                 pthread_mutex_lock(&bufferSession->buffer_lock);
@@ -63,7 +76,9 @@ void run_dummy_producer(BufferSession* bufferSession)
         }
 
         pthread_mutex_unlock(&bufferSession->buffer_lock);
-        usleep(1000);
+
+        // sleep atleas 1.1ms - cannot repeat ms
+        usleep(1100); 
     }
     
     free(dataBuffer);
