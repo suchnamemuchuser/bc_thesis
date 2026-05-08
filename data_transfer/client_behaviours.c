@@ -388,6 +388,8 @@ void* dataProcessorThread(void* arg)
         // copy recording info from master
         DbItem recording = masterBuf->recordingInfo;
         pthread_mutex_unlock(&masterBuf->buffer_lock);
+
+        printf("Processing\n");
         
         // into output
         pthread_mutex_lock(&outBuf->buffer_lock);
@@ -405,8 +407,15 @@ void* dataProcessorThread(void* arg)
             startMilliseconds[i] = (streamMilliseconds[i][1] & 0x03) << 8 | streamMilliseconds[i][2];
         }
 
+        for (int i = 0 ; i < 4 ; i ++)
+        {
+            printf("Stream %d has ms %d\n", i, startMilliseconds[i]);
+        }
+
         // get starting ms
         currentMs = getEarliestMs(startMilliseconds, 4);
+
+        printf("Starting with ms %d\n", currentMs);
 
         bool allBuffersActive = true;
 
@@ -441,9 +450,13 @@ void* dataProcessorThread(void* arg)
                 pthread_mutex_unlock(&outBuf->buffer_lock);
                 // write outside of lock
                 circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&msFromStart, sizeof(msFromStart)); // write ms first
+                pthread_mutex_lock(&outBuf->buffer_lock);
+                circularBufferConfirmWrite(&outBuf->buffer, sizeof(msFromStart));
+                pthread_mutex_unlock(&outBuf->buffer_lock);
+
                 circularBufferMemWrite(&outBuf->buffer, (uint8_t*)processedData, sizeof(processedData)); // then processed data
                 pthread_mutex_lock(&outBuf->buffer_lock);
-                circularBufferConfirmWrite(&outBuf->buffer, sizeof(processedData) + sizeof(msFromStart));
+                circularBufferConfirmWrite(&outBuf->buffer, sizeof(processedData));
                 pthread_cond_broadcast(&outBuf->data_available);
             }
             pthread_mutex_unlock(&outBuf->buffer_lock);
@@ -463,6 +476,11 @@ void* dataProcessorThread(void* arg)
             // update milliseconds
             msFromStart++;
             currentMs = (currentMs + 1) % 1000;
+
+            if ((msFromStart % 1000) == 0)
+            {
+                printf("Seconds from start: %ld\n", msFromStart / 1000);
+            }
         } 
         // some buffer ended
 
@@ -860,10 +878,13 @@ void* dataAveragerThread(void* arg)
                     pthread_mutex_unlock(&outBuf->buffer_lock);
                     
                     circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&currentSecond, sizeof(currentSecond));
-                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)oneSecond, sizeof(oneSecond));
-                    
                     pthread_mutex_lock(&outBuf->buffer_lock);
-                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(oneSecond) + sizeof(currentSecond));
+                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(currentSecond));
+                    pthread_mutex_unlock(&outBuf->buffer_lock);
+
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)oneSecond, sizeof(oneSecond));
+                    pthread_mutex_lock(&outBuf->buffer_lock);
+                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(oneSecond));
                     pthread_cond_broadcast(&outBuf->data_available);
                 }
                 pthread_mutex_unlock(&outBuf->buffer_lock);
