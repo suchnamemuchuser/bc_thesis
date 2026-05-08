@@ -46,5 +46,6 @@ void* fileConsumerThread(void* arg);
 void* dataProcessorThread(void* arg);
 void* bufferNetworkConsumerThread(void* arg);
 void* dataAveragerThread(void* arg);
+void* imageArchiverThread(void* arg);
 
 #endif // CLIENT_BEHAVIOURS_H
