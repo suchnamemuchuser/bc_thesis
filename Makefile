@@ -13,6 +13,13 @@ SHELL_FILES=daily_sun_plan.sh
 web:
 	mkdir -p $(WEB)
 	cd web_server && cp -f $(PHP_FILES) $(OTHER_FILES) $(WEB)
+	@if [ ! -f $(WEB)/config.php ]; then \
+		cp web_server/default_config.php $(WEB)/config.php; \
+	fi
+
+reset-config:
+	mkdir -p $(WEB)
+	cd web_server && cp -f default_config.php $(WEB)/config.php
 
 script:
 	mkdir -p $(WEB_BIN)
