@@ -756,13 +756,16 @@ void* bufferNetworkConsumerThread(void* arg)
 void* dataAveragerThread(void* arg)
 {
     ClientContext* ctx = (ClientContext*) arg;
+    DataAveragerArgs* args = ctx->customArgs;
     BufferSession* inBuf = ctx->inputBuffers[0];
     BufferSession* outBuf = ctx->outputBuffer;
 
-    uint64_t oneSecond[4 * SAMPLES_PER_MS];
-    uint64_t inputSecond[4 * SAMPLES_PER_MS + 1]; // [0] is ms timestamp, [1...] is data
+    int ratio = args->ratio;
 
-    uint64_t currentSecond;
+    uint64_t averagedData[4 * SAMPLES_PER_MS];
+    uint64_t inputSecond[4 * SAMPLES_PER_MS + 1];
+
+    uint64_t blockTimestampMs; 
 
     bool threadRecordingActive = false;
     size_t readLen; 
@@ -848,48 +851,53 @@ void* dataAveragerThread(void* arg)
             // If ms == 0, zero out our accumulation buffer
             if (recordingMs == 0)
             {
-                bzero(oneSecond, sizeof(oneSecond));
+                bzero(averagedData, sizeof(averagedData));
 
-                // Calculate the timestamp in seconds (msFromStart is inputSecond[0])
-                currentSecond = inputSecond[0] / 1000;
+                blockTimestampMs = inputSecond[0] / 1000;
             }
 
             // Accumulate the 1ms data (offset by 1 because index 0 is the ms timestamp)
             for (int i = 0; i < 4 * SAMPLES_PER_MS; i++)
             {
-                oneSecond[i] += inputSecond[i + 1];
+                averagedData[i] += inputSecond[i + 1];
             }
 
             recordingMs++;
 
-            // If we have aggregated a full second (1000 ms)
-            if (recordingMs == 1000)
+            // If we have aggregated the target amount of data
+            if (recordingMs == ratio)
             {
                 // Divide to get the average
                 for (int i = 0; i < 4 * SAMPLES_PER_MS; i++)
                 {
-                    oneSecond[i] /= 1000;
+                    if (ratio > 0) 
+                    {
+                        averagedData[i] /= ratio;
+                    }
                 }
 
                 // Write to output buffer
                 pthread_mutex_lock(&outBuf->buffer_lock);
-                if (circularBufferWriterSpace(&outBuf->buffer) > sizeof(oneSecond) + sizeof(currentSecond)) 
+                if (circularBufferWriterSpace(&outBuf->buffer) > sizeof(averagedData) + sizeof(blockTimestampMs)) 
                 {
                     pthread_mutex_unlock(&outBuf->buffer_lock);
                     
-                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&currentSecond, sizeof(currentSecond));
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)&blockTimestampMs, sizeof(blockTimestampMs));
                     pthread_mutex_lock(&outBuf->buffer_lock);
-                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(currentSecond));
+                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(blockTimestampMs));
                     pthread_mutex_unlock(&outBuf->buffer_lock);
 
-                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)oneSecond, sizeof(oneSecond));
+                    circularBufferMemWrite(&outBuf->buffer, (uint8_t*)averagedData, sizeof(averagedData));
                     pthread_mutex_lock(&outBuf->buffer_lock);
-                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(oneSecond));
+                    circularBufferConfirmWrite(&outBuf->buffer, sizeof(averagedData));
                     pthread_cond_broadcast(&outBuf->data_available);
                 }
-                pthread_mutex_unlock(&outBuf->buffer_lock);
+                else
+                {
+                    pthread_mutex_unlock(&outBuf->buffer_lock);
+                }
 
-                // Reset for the next second block
+                // Reset for the next block
                 recordingMs = 0;
             }
         } // End of recording active loop

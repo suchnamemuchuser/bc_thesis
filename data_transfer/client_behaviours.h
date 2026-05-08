@@ -26,6 +26,10 @@ typedef struct {
     char sourceImagePath[256];
 } ImageArchiverArgs;
 
+typedef struct {
+    int ratio;
+} DataAveragerArgs;
+
 
 // This is the single void* passed to EVERY thread
 typedef struct {

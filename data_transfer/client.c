@@ -299,7 +299,10 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
         }
         else if (strcmp(func_name, "data_averager") == 0)
         {
-            ctx->customArgs = NULL;
+            DataAveragerArgs* a_args = malloc(sizeof(DataAveragerArgs));
+            a_args->ratio = cJSON_GetObjectItemCaseSensitive(args_json, "ratio")->valueint;
+            
+            ctx->customArgs = a_args;
             thread_func = dataAveragerThread;
         }
         else if (strcmp(func_name, "image_archiver") == 0)
