@@ -300,7 +300,7 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
         else if (strcmp(func_name, "data_averager") == 0)
         {
             ctx->customArgs = NULL;
-            thread_func = dataProcessorThread;
+            thread_func = dataAveragerThread;
         }
         else if (strcmp(func_name, "image_archiver") == 0)
         {
@@ -309,7 +309,7 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
             strncpy(a_args->sourceImagePath, cJSON_GetObjectItemCaseSensitive(args_json, "source_image_path")->valuestring, 255);
 
             ctx->customArgs = a_args;
-            thread_func = dataProcessorThread;
+            thread_func = imageArchiverThread;
         }
         else
         {
