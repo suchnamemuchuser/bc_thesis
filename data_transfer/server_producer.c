@@ -25,14 +25,11 @@ void run_dummy_producer(BufferSession* bufferSession)
         exit(1);
     }
 
-    // make payload
+    uint8_t gain;
+
     for (int i = 0; i < 1024; i++)
     {
-        // gain changes every 256 samples: 0, 1, 2, 3
-        uint8_t gain = i / 256; 
-        
-        // values go 10000, 10001, 10002...
-        uint32_t raw_val = 10000 + i; 
+        uint32_t raw_val = (i << 12) | 0xAA; 
 
         size_t offset = 3 + (i * 3);
         
@@ -48,7 +45,22 @@ void run_dummy_producer(BufferSession* bufferSession)
         gettimeofday(&tv, NULL);
         uint16_t current_ms = tv.tv_usec / 1000;
 
-        // write Header
+        if (current_ms == 0)
+        {
+            gain = rand() % 4;
+
+            for (int i = 0; i < 1024; i++)
+            {
+                uint32_t raw_val = (i << 12) | 0xAA; 
+
+                size_t offset = 3 + (i * 3);
+                
+                dataBuffer[offset] = ((gain & 0x03) << 6) | ((raw_val >> 16) & 0x3F);
+                dataBuffer[offset + 1] = (raw_val >> 8) & 0xFF;
+                dataBuffer[offset + 2] = raw_val & 0xFF;
+            }
+        }
+
         dataBuffer[0] = 0xAA;
         dataBuffer[1] = 0x80 | ((current_ms >> 8) & 0x03);
         dataBuffer[2] = current_ms & 0xFF;
@@ -61,7 +73,6 @@ void run_dummy_producer(BufferSession* bufferSession)
 
             if (space >= (size_t)PROD_BUF_SIZ)
             {
-                // Unlock while copying data into the buffer memory to keep mutex free
                 pthread_mutex_unlock(&bufferSession->buffer_lock);
                 circularBufferMemWrite(&bufferSession->buffer, dataBuffer, PROD_BUF_SIZ);
                 pthread_mutex_lock(&bufferSession->buffer_lock);
@@ -77,7 +88,7 @@ void run_dummy_producer(BufferSession* bufferSession)
 
         pthread_mutex_unlock(&bufferSession->buffer_lock);
 
-        // sleep atleas 1.1ms - cannot repeat ms
+        // sleep at least 1.1ms - cannot repeat ms
         usleep(1100); 
     }
     
