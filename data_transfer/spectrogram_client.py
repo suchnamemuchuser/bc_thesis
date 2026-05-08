@@ -3,12 +3,19 @@ import struct
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
+from collections import deque
 
 # --- Configuration ---
 HOST = '127.0.0.1'
 PORT = 65200
-IMAGE_OUT_PATH = '/var/www/html/rt2/telescope_spectrogram.png'
+IMAGE_OUT_PATH = '/home/suchname/client/spectrogram.png'
 TEMP_IMAGE_PATH = '/tmp/telescope_temp.png'
+
+# --- Display & Layout Controls ---
+SAMPLES_PER_SECOND = 4096  # HEIGHT: How many frequency samples in a 1-second row
+DISPLAY_SECONDS = 60       # WIDTH: Max history to show on the X-axis before scrolling
+UPDATE_FREQ_SECONDS = 5    # FREQ: How many new seconds to receive before redrawing the image
 
 # Protocol Constants
 PROTOCOL_MAGIC = 0xAA
@@ -18,13 +25,8 @@ PACKET_TYPE_END = 0x03
 PACKET_TYPE_INACTIVE = 0x04
 
 # Data Structure Constants
-SAMPLES_PER_MS = 1024
-NUM_STREAMS = 4
-TOTAL_SAMPLES = SAMPLES_PER_MS * NUM_STREAMS # 4096
-# 8 bytes for timestamp + (4096 * 8 bytes for data) = 32776 bytes per row
-ROW_SIZE_BYTES = 8 + (TOTAL_SAMPLES * 8) 
-
-UPDATE_EVERY_N_ROWS = 10 # Overwrite the image every 10 seconds of data
+# 8 bytes for timestamp + (Samples * 8 bytes for data)
+ROW_SIZE_BYTES = 8 + (SAMPLES_PER_SECOND * 8) 
 
 def recv_exact(sock, num_bytes):
     """Helper to ensure we receive exactly the requested number of bytes."""
@@ -36,21 +38,28 @@ def recv_exact(sock, num_bytes):
         data.extend(packet)
     return bytes(data)
 
-def save_waterfall_image(data_2d_array, target_id):
+def save_waterfall_image(data_deque, target_id):
     """Renders the 2D numpy array as a spectrogram and saves it atomically."""
-    if len(data_2d_array) == 0:
+    if len(data_deque) == 0:
         return
 
     plt.figure(figsize=(12, 6))
 
-    # Render the heatmap
-    # aspect='auto' stretches the image to fill the figure
-    plt.imshow(data_2d_array, aspect='auto', cmap='viridis', origin='lower')
+    # Convert the deque of rows to a numpy array, then transpose (.T)
+    # This turns shape (Time, Frequency) into (Frequency, Time)
+    plot_data = np.array(data_deque).T
 
-    plt.colorbar(label='Signal Intensity')
-    plt.title(f'Radio Telescope Waterfall - Target ID: {target_id}')
-    plt.xlabel('Frequency Bins')
-    plt.ylabel('Time (Seconds)')
+    # LogNorm crashes if it encounters absolute zero or negative numbers.
+    # This clips the floor to a tiny decimal to guarantee it renders properly.
+    plot_data = np.clip(plot_data, 1e-5, None)
+
+    # Render the heatmap using LogNorm for logarithmic scaling
+    plt.imshow(plot_data, aspect='auto', cmap='viridis', origin='lower', norm=LogNorm())
+
+    plt.colorbar(label='Signal Intensity (Log Scale)')
+    plt.title(f'{target_id}')
+    plt.xlabel('Time (Seconds)')
+    plt.ylabel('Frequency Bins')
     plt.tight_layout()
 
     # Save and atomically swap
@@ -71,7 +80,10 @@ def main():
     print("Connected! Waiting for packets...")
 
     current_target_id = None
-    waterfall_data = [] 
+    
+    # Using deque allows us to automatically drop old data to match the "WIDTH"
+    waterfall_data = deque(maxlen=DISPLAY_SECONDS) 
+    
     byte_accumulator = bytearray()
     rows_since_last_update = 0
 
@@ -83,9 +95,8 @@ def main():
                 print("Server closed connection.")
                 break
 
-            # Unpack: > means Big-Endian (because of htonl)
-            # B = unsigned char (1 byte), B = unsigned char (1 byte), I = unsigned int (4 bytes)
-            magic, pkt_type, value = struct.unpack('>BBI', header_bytes)
+            # Unpack: > means Big-Endian
+            magic, pkt_type, value = struct.unpack('>BBi', header_bytes)
 
             if magic != PROTOCOL_MAGIC:
                 print(f"Desync! Bad magic byte: {hex(magic)}. Closing connection.")
@@ -97,7 +108,7 @@ def main():
 
             elif pkt_type == PACKET_TYPE_START:
                 current_target_id = value
-                waterfall_data = [] 
+                waterfall_data.clear() # Reset data for new recording
                 byte_accumulator = bytearray()
                 rows_since_last_update = 0
                 print(f"Started new recording. Target ID: {current_target_id}")
@@ -117,28 +128,30 @@ def main():
                     row_bytes = byte_accumulator[:ROW_SIZE_BYTES]
                     del byte_accumulator[:ROW_SIZE_BYTES] # Remove processed bytes
 
-                    # 1 timestamp + 4096 samples = 4097 Qs
-                    unpack_format = f'<{TOTAL_SAMPLES + 1}Q'
+                    # 1 timestamp + N samples
+                    unpack_format = f'<{SAMPLES_PER_SECOND + 1}Q'
                     row_data = struct.unpack(unpack_format, row_bytes)
 
                     timestamp_ms = row_data[0]
+                    print(f"Received second: {timestamp_ms}")
                     samples = row_data[1:] # Slice off the timestamp for the image
 
                     waterfall_data.append(samples)
                     rows_since_last_update += 1
 
-                    if rows_since_last_update >= UPDATE_EVERY_N_ROWS:
-                        print(f"Updating web image... (Rows: {len(waterfall_data)})")
-                        save_waterfall_image(np.array(waterfall_data), current_target_id)
+                    if rows_since_last_update >= UPDATE_FREQ_SECONDS:
+                        print(f"Updating web image... (Visible columns: {len(waterfall_data)})")
+                        save_waterfall_image(waterfall_data, current_target_id)
                         rows_since_last_update = 0
 
             elif pkt_type == PACKET_TYPE_END:
                 print("Recording ended. Saving final image.")
-                save_waterfall_image(np.array(waterfall_data), current_target_id)
+                if waterfall_data:
+                    save_waterfall_image(waterfall_data, current_target_id)
 
                 # Reset state
                 current_target_id = None
-                waterfall_data = [] 
+                waterfall_data.clear()
                 byte_accumulator = bytearray()
 
     except KeyboardInterrupt:
