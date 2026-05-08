@@ -381,3 +381,18 @@ input[type="range"] {
 #pagination-controls button:hover {
     border-color: #1b263b;
 }
+
+/* --------------------------------------------*/
+/* --- CURRENT --------------------------------*/
+/* --------------------------------------------*/
+
+.image-container {
+    display: flex;
+    justify-content: center;
+    gap: 1rem;
+}
+
+.image-container img {
+    width: 50%;
+    border: 1px solid #415a77;
+}

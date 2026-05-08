@@ -3,6 +3,7 @@
     <nav>
         <ul>
             <li><a href="index.php">Planner</a></li>
+            <li><a href="current.php">Current</a></li>
             <li><a href="history.php">Observations</a></li>
         </ul>
     </nav>

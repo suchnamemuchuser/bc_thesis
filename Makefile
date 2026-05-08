@@ -6,7 +6,7 @@ DB_DIR?=/var/lib/rt2
 DB_FILE=$(DB_DIR)/plan.db
 
 PHP_FILES=*.php
-OTHER_FILES=style.css script.js history.js
+OTHER_FILES=style.css script.js history.js current.js
 PY_FILES=gen_obs_json.py
 SHELL_FILES=daily_sun_plan.sh
 

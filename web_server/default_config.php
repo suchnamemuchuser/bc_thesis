@@ -24,4 +24,8 @@ $recordingBaseDir = "/var/lib/rt2/data";
 $alias = "/data";
 
 $radarField = "../img/latestrt2.jpg";
+
+$spectrogram = "spectrogram.png";
+
+$refreshIntervalSeconds = 10;
 ?>
