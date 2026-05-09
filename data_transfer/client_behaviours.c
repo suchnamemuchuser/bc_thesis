@@ -620,17 +620,17 @@ void* bufferNetworkConsumerThread(void* arg)
 
         // Client handling loop: send data until client disconnects
         while (clientConnected)
-    {
-        readLen = DATA_PACKET_DEFAULT_SIZE;
-
-        pthread_mutex_lock(&bufferSession->buffer_lock);
-        bufferRecordingActive = bufferSession->buffer.recordingActive;
-        pthread_mutex_unlock(&bufferSession->buffer_lock);
-
-        if (!threadRecordingActive && !bufferRecordingActive) // no recording - sleep
         {
-            header.type = PACKET_TYPE_INACTIVE;
-            header.value = htonl(0);
+            readLen = DATA_PACKET_DEFAULT_SIZE;
+
+            pthread_mutex_lock(&bufferSession->buffer_lock);
+            bufferRecordingActive = bufferSession->buffer.recordingActive;
+            pthread_mutex_unlock(&bufferSession->buffer_lock);
+
+            if (!threadRecordingActive && !bufferRecordingActive) // no recording - sleep
+            {
+                header.type = PACKET_TYPE_INACTIVE;
+                header.value = htonl(0);
                 if (sendall(client_fd, (const uint8_t*)&header, sizeof(header)) == -1)
                 {
                     clientConnected = false;
@@ -779,8 +779,6 @@ void* dataAveragerThread(void* arg)
     inBuf->buffer.reader_cnt++;
     pthread_mutex_unlock(&inBuf->buffer_lock);
 
-    printf("Client %d registered with buffer %d.\n", ctx->clientId, inBuf->bufferId);
-
     while (true) // Loop for all recordings
     {
         // Wait for recording to start
@@ -789,6 +787,7 @@ void* dataAveragerThread(void* arg)
         {
             pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
         }
+
         // Copy recording info and set output as active
         DbItem recording = inBuf->recordingInfo;
         pthread_mutex_unlock(&inBuf->buffer_lock);
@@ -807,7 +806,7 @@ void* dataAveragerThread(void* arg)
         {
             // Wait for 1 ms of data or end of recording
             pthread_mutex_lock(&inBuf->buffer_lock);
-            while ((availableData = circularBufferAvailableData(&inBuf->buffer, consumerId)) < PROCESSED_BYTES_PER_MS && inBuf->buffer.recordingActive)
+            while (((availableData = circularBufferAvailableData(&inBuf->buffer, consumerId)) < PROCESSED_BYTES_PER_MS) && inBuf->buffer.recordingActive)
             {
                 pthread_cond_wait(&inBuf->data_available, &inBuf->buffer_lock);
             }
@@ -820,8 +819,9 @@ void* dataAveragerThread(void* arg)
                 break;
             }
 
-            readLen = circularBufferReadData(&inBuf->buffer, consumerId, PROCESSED_BYTES_PER_MS, &readPtr);
             pthread_mutex_unlock(&inBuf->buffer_lock);
+
+            readLen = circularBufferReadData(&inBuf->buffer, consumerId, PROCESSED_BYTES_PER_MS, &readPtr);
 
             // Need to copy out because uint64 can be split across buffer bounds
             memcpy(inputSecond, readPtr, readLen);
@@ -833,10 +833,9 @@ void* dataAveragerThread(void* arg)
 
                 pthread_mutex_lock(&inBuf->buffer_lock);
                 circularBufferConfirmRead(&inBuf->buffer, consumerId, firstPart);
+                pthread_mutex_unlock(&inBuf->buffer_lock);
                 
                 circularBufferReadData(&inBuf->buffer, consumerId, remainingBytes, &readPtr);
-                
-                pthread_mutex_unlock(&inBuf->buffer_lock);
                 
                 memcpy((uint8_t*)inputSecond + firstPart, readPtr, remainingBytes);
 
@@ -891,6 +890,7 @@ void* dataAveragerThread(void* arg)
                     pthread_mutex_lock(&outBuf->buffer_lock);
                     circularBufferConfirmWrite(&outBuf->buffer, sizeof(averagedData));
                     pthread_cond_broadcast(&outBuf->data_available);
+                    pthread_mutex_unlock(&outBuf->buffer_lock);
                 }
                 else
                 {
