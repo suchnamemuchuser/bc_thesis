@@ -308,7 +308,7 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
         else if (strcmp(func_name, "image_archiver") == 0)
         {
             ImageArchiverArgs* a_args = malloc(sizeof(ImageArchiverArgs));
-            strncpy(a_args->dataDir, cJSON_GetObjectItemCaseSensitive(args_json, "data_dir")->valuestring, 255);
+            strncpy(a_args->dataDir, cJSON_GetObjectItemCaseSensitive(args_json, "output_dir")->valuestring, 255);
             strncpy(a_args->sourceImagePath, cJSON_GetObjectItemCaseSensitive(args_json, "source_image_path")->valuestring, 255);
 
             ctx->customArgs = a_args;
