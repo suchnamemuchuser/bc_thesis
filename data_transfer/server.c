@@ -119,8 +119,29 @@ int main(){
 
         DbItem nextRecording = getNextDbItem(appConfig->database, curTime);
 
-        if (nextRecording.id == -1)
+        if (nextRecording.id == -1) // no plan action coming, check for current recording
         {
+            if (currentRecording.id != 0) // actively recording, check if cancelled
+            {
+                DbItem rec = getDbItemById(appConfig->database, currentRecording.id);
+
+                if (rec.id == -1) // current recording cancelled
+                {
+                    printf("Recording of %s cancelled!\n", currentRecording.object_name);
+                    currentRecording = emptyItem;
+
+                    for (int i = 0 ; i < appConfig->deviceCount ; i++)
+                    {
+                        pthread_mutex_lock(&bufferSessions[i].buffer_lock);
+                        bufferSessions[i].recordingInfo = emptyItem;
+                        bufferSessions[i].buffer.recordingActive = false;
+                        pthread_mutex_unlock(&bufferSessions[i].buffer_lock);
+                    }
+                    
+                    continue;
+                }
+            }
+
             printf("Sleeping for 1 min.\n");
             sleep(60);
             continue;
