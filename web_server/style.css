@@ -75,6 +75,7 @@ input {
 
 select {
     border: none;
+    background: rgba(0, 0, 0, 0);
 }
 
 #plan-date {
