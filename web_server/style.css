@@ -394,14 +394,13 @@ input[type="range"] {
 }
 
 .image-container img {
-    width: 50%;
+    width: calc((100% - 1rem) / 2);
     border: 1px solid #415a77;
 }
 
 .dashboard-panel {
     background: #bfdbf7;
     border: 1px solid #415a77;
-    border-radius: 8px;
     padding: 0.5rem;
     margin-bottom: 1rem;
     width: fit-content; 
