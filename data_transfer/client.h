@@ -18,8 +18,6 @@ typedef struct bufferSession {
 
     pthread_cond_t data_available;
 
-    Device deviceInfo;
-
     DbItem recordingInfo;
 
 } BufferSession;
