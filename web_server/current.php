@@ -9,10 +9,13 @@
         <?php $pageTitle = "Current Observation"; include 'header.php'; ?>
         
         <section id="current-recording">
-            <div id="recording-info">
-                <!-- Data will be injected here by JS -->
-                <h3>Status: <span id="status-text">Loading...</span></h3>
-                <p>Target: <span id="target-name">...</span></p>
+            <div class="dashboard-panel">
+                <h3>Current Target: <span id="target-name">Loading...</span></h3>
+                <ul class="target-details">
+                    <li><strong>Status:</strong> <span id="target-status">-</span></li>
+                    <li><strong>Start:</strong> <span id="target-rec-start">-</span></li>
+                    <li><strong>End:</strong> <span id="target-end">-</span></li>
+                </ul>
             </div>
 
             <div class="image-container">

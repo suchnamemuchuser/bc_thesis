@@ -397,3 +397,24 @@ input[type="range"] {
     width: 50%;
     border: 1px solid #415a77;
 }
+
+.dashboard-panel {
+    background: #bfdbf7;
+    border: 1px solid #415a77;
+    border-radius: 8px;
+    padding: 0.5rem;
+    margin-bottom: 1rem;
+    width: fit-content; 
+}
+
+.target-details {
+    list-style-type: none;
+    padding: 0;
+    margin: 10px 0 0 0;
+    display: flex;
+    gap: 1.5rem;
+}
+
+.target-details li {
+    white-space: nowrap; 
+}
