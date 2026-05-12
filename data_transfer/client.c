@@ -286,9 +286,29 @@ void parseConfigClients(cJSON* root, BufferRegistry* registry) {
         else if (strcmp(func_name, "file_consumer") == 0)
         {
             FileConsumerArgs* c_args = malloc(sizeof(FileConsumerArgs));
-            strncpy(c_args->dataDir, cJSON_GetObjectItemCaseSensitive(args_json, "data_dir")->valuestring, 255);
-            strncpy(c_args->ext, cJSON_GetObjectItemCaseSensitive(args_json, "ext")->valuestring, 63);
-            
+            memset(c_args, 0, sizeof(FileConsumerArgs)); // Initialize to 0
+
+            cJSON *item;
+
+            // Strings
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "data_dir")))
+                strncpy(c_args->dataDir, item->valuestring, 255);
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "ext")))
+                strncpy(c_args->ext, item->valuestring, 63);
+
+            // Integers
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "telescope_id"))) c_args->telID = item->valueint;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "machine_id"))) c_args->machId = item->valueint;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "nchans"))) c_args->nchans = item->valueint;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "nbits"))) c_args->nbits = item->valueint;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "data_type"))) c_args->dataType = item->valueint;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "barycentric"))) c_args->barycentric = item->valueint;
+
+            // Floats / Doubles
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "tsamp"))) c_args->tsamp = (float)item->valuedouble;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "fch1"))) c_args->fch1 = (float)item->valuedouble;
+            if ((item = cJSON_GetObjectItemCaseSensitive(args_json, "foff"))) c_args->foff = (float)item->valuedouble;
+
             ctx->customArgs = c_args;
             thread_func = bufferFileConsumerThread;
         }
