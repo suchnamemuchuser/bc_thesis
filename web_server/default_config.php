@@ -23,7 +23,7 @@ $recordingBaseDir = "/var/lib/rt2/data";
 
 $alias = "/data";
 
-$radarField = "../img/latestrt2.jpg";
+$radarField = "camera.jpg";
 
 $spectrogram = "spectrogram.png";
 
