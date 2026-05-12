@@ -19,6 +19,15 @@ typedef struct {
 typedef struct {
     char dataDir[256];
     char ext[64];
+    int telID;
+    int machId;
+    int nchans;
+    int nbits;
+    float tsamp;
+    float fch1;
+    float foff;
+    int dataType;
+    int barycentric;
 } FileConsumerArgs;
 
 typedef struct {

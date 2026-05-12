@@ -49,6 +49,8 @@ int getEarliestMs(int *streamMs, int streamCount);
 
 void copyImageWithTimestamp(const char* sourcePath, const char* baseDataDir, const char* objectName, time_t eventTime);
 
+static void writeSigprocHeader(FILE *file, const char *object_name, int unix_start_time, const FileConsumerArgs *args);
+
 void* networkProducerThread(void* arg){
     ClientContext* ctx = (ClientContext*) arg;
     NetworkProducerArgs* args = (NetworkProducerArgs*) ctx->customArgs;
@@ -190,6 +192,8 @@ void* networkProducerThread(void* arg){
                 }
                 else if (header.type == PACKET_TYPE_END) // set end flag
                 {
+                    printf("NETWORK PROD ENDING RECORDING!!!\n");
+
                     pthread_mutex_lock(&bufferSession->buffer_lock);
                     bufferSession->buffer.recordingActive = false;
                     bufferSession->recordingInfo = (DbItem){0};
@@ -279,6 +283,8 @@ void* bufferFileConsumerThread(void* arg)
                 }
 
                 printf("File opened successfully: %s\n", filePath);
+
+                writeSigprocHeader(file, bufferSession->recordingInfo.object_name, bufferSession->recordingInfo.rec_start_time, args);
             }
 
             pthread_mutex_unlock(&bufferSession->buffer_lock);
@@ -379,13 +385,12 @@ void* dataProcessorThread(void* arg)
 
     while (true) // master recordings loop
     {
-        // Wait for recording to start
+        // 1. Wait for master buffer to get recording info
         pthread_mutex_lock(&masterBuf->buffer_lock);
         while(!masterBuf->buffer.recordingActive)
         {
             pthread_cond_wait(&masterBuf->data_available, &masterBuf->buffer_lock);
         }
-        // copy recording info from master
         DbItem recording = masterBuf->recordingInfo;
         pthread_mutex_unlock(&masterBuf->buffer_lock);
 
@@ -443,7 +448,7 @@ void* dataProcessorThread(void* arg)
                 } // else skip, buffer is zeroed out
             }
 
-            // check if space in output buffer andwrite
+            // check if space in output buffer and write
             pthread_mutex_lock(&outBuf->buffer_lock);
             if (circularBufferWriterSpace(&outBuf->buffer) > sizeof(processedData) + sizeof(msFromStart)) // space for overall ms
             {
@@ -461,6 +466,8 @@ void* dataProcessorThread(void* arg)
             }
             pthread_mutex_unlock(&outBuf->buffer_lock);
 
+            //printf("Wrote ms %d\n", msFromStart);
+
             for (int i = 0 ; i < 4 ; i++) // update all streams ms, check for end of recording
             {
                 int streamMs = (streamMilliseconds[i][1] & 0x03) << 8 | streamMilliseconds[i][2];
@@ -476,7 +483,8 @@ void* dataProcessorThread(void* arg)
             // update milliseconds
             msFromStart++;
             currentMs = (currentMs + 1) % 1000;
-
+            //printf("Got ms %d\n", msFromStart);
+            
             if ((msFromStart % 1000) == 0)
             {
                 printf("Seconds from start: %ld\n", msFromStart / 1000);
@@ -791,6 +799,8 @@ void* dataAveragerThread(void* arg)
         // Copy recording info and set output as active
         DbItem recording = inBuf->recordingInfo;
         pthread_mutex_unlock(&inBuf->buffer_lock);
+
+        printf("Averager started\n");
 
         pthread_mutex_lock(&outBuf->buffer_lock);
         outBuf->recordingInfo = recording;
@@ -1230,6 +1240,68 @@ void copyImageWithTimestamp(const char* sourcePath, const char* baseDataDir, con
     close(source_fd);
     close(dest_fd);
     printf("Archiver: Saved image %s\n", filePath);
+}
+
+static void writeSigprocString(FILE *file, const char *string)
+{
+    int len = strlen(string);
+    fwrite(&len, sizeof(int), 1, file);
+    fwrite(string, sizeof(char), len, file);
+}
+
+static void writeSigprocInt(FILE *file, const char *name, int value)
+{
+    writeSigprocString(file, name);
+    fwrite(&value, sizeof(int), 1, file);
+}
+
+static void writeSigprocDouble(FILE *file, const char *name, double value)
+{
+    writeSigprocString(file, name);
+    fwrite(&value, sizeof(double), 1, file);
+}
+
+static void writeSigprocHeader(FILE *file, const char *object_name, int unix_start_time, const FileConsumerArgs *args)
+{
+    if (file == NULL || args == NULL) return;
+
+    // MJD from timestamp
+    double tstart = (unix_start_time / 86400.0) + 40587.0;
+
+    // start header
+    writeSigprocString(file, "HEADER_START");
+
+    // ts info
+    writeSigprocInt(file, "machine_id", args->machId);
+    writeSigprocInt(file, "telescope_id", args->telID);
+    writeSigprocInt(file, "data_type", args->dataType);
+    
+    // name
+    writeSigprocString(file, "source_name");
+    writeSigprocString(file, object_name);
+
+    // cannot get raj dec.. write zeros
+    writeSigprocDouble(file, "src_raj", 0.0);
+    writeSigprocDouble(file, "src_dej", 0.0);
+    writeSigprocDouble(file, "az_start", 0.0);
+    writeSigprocDouble(file, "za_start", 0.0);
+
+    // other params
+    writeSigprocInt(file, "barycentric", args->barycentric);
+    writeSigprocInt(file, "pulsarcentric", 0);
+    writeSigprocDouble(file, "tstart", tstart);
+    writeSigprocDouble(file, "tsamp", args->tsamp);
+    writeSigprocInt(file, "nbits", args->nbits);
+    writeSigprocDouble(file, "fch1", args->fch1);
+    writeSigprocDouble(file, "foff", args->foff);
+    writeSigprocInt(file, "nchans", args->nchans);
+    
+    // default ifs and beams to 1
+    writeSigprocInt(file, "nifs", 1);
+    writeSigprocInt(file, "nbeams", 1);
+
+    // end header
+    writeSigprocString(file, "HEADER_END");
 }
 
 #endif
