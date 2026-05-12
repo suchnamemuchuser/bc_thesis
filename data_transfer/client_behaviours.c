@@ -394,6 +394,17 @@ void* dataProcessorThread(void* arg)
         DbItem recording = masterBuf->recordingInfo;
         pthread_mutex_unlock(&masterBuf->buffer_lock);
 
+        // 2. NEW: Wait for ALL streams to be officially recording
+        for (int i = 0 ; i < 4 ; i++) 
+        {
+            pthread_mutex_lock(&ctx->inputBuffers[i]->buffer_lock);
+            while(!ctx->inputBuffers[i]->buffer.recordingActive)
+            {
+                pthread_cond_wait(&ctx->inputBuffers[i]->data_available, &ctx->inputBuffers[i]->buffer_lock);
+            }
+            pthread_mutex_unlock(&ctx->inputBuffers[i]->buffer_lock);
+        }
+        
         printf("Processing\n");
         
         // into output
