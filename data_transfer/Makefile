@@ -16,7 +16,7 @@ server: $(COMMON) $(SERVER) | $(DB_FILE)
 	$(CC) $(SERVER) $(COMMON) -o $(SERVEROUT) $(LIBS) $(FTDI_LIB)
 
 client: $(COMMON) $(CLIENT)
-	$(CC) $(CLIENT) $(COMMON) -o $(CLIENTOUT) $(LIBS)
+	$(CC) -g $(CLIENT) $(COMMON) -o $(CLIENTOUT) $(LIBS)
 
 $(DB_FILE):
 	sqlite3 $(DB_FILE) < $(DB_SCHEMA)
