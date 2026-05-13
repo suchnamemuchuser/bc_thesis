@@ -1,25 +1,35 @@
 {
-    "buffer_status_file": "/home/suchname/client/buffer_status.log",
+    "buffer_status_file": "/home/josefm/client/buffer_status.log",
     "buffers": [
         {
             "id": 0,
             "size": 184500000,
-            "description": "raw data rt1"
+            "description": "raw data rt2.0"
         },
         {
             "id": 1,
             "size": 184500000,
-            "description": "raw data rt2"
+            "description": "raw data rt2.1"
         },
         {
             "id": 2,
-            "size": 40970000,
-            "description": "10 sec of processed data"
+            "size": 184500000,
+            "description": "raw data rt2.2"
         },
         {
             "id": 3,
-            "size": 19665600,
-            "description": "10 min of 1:1000 averaged data"
+            "size": 184500000,
+            "description": "raw data rt2.3"
+        },
+        {
+            "id": 4,
+            "size": 184500000,
+            "description": "processed data (hopefully)"
+        },
+        {
+            "id": 5,
+            "size": 184500000,
+            "description": "averaged data"
         }
     ],
     "clients": [
@@ -32,7 +42,7 @@
             "args": {
                 "database": "/var/lib/rt2/plan.db",
                 "source": "localhost",
-                "port": 65101
+                "port": 65100
             }
         },
         {
@@ -44,57 +54,60 @@
             "args": {
                 "database": "/var/lib/rt2/plan.db",
                 "source": "localhost",
-                "port": 65102
+                "port": 65101
             }
         },
         {
             "id": 2,
-            "description": "File consumer 0",
-            "function": "file_consumer",
-            "output_buffer": -1,
-            "input_buffers": [0],
+            "description": "Network client 2",
+            "function": "network_producer",
+            "output_buffer": 2,
+            "input_buffers": [],
             "args": {
-                "data_dir": "/home/suchname/client",
-                "ext": "rt1"
+                "database": "/var/lib/rt2/plan.db",
+                "source": "localhost",
+                "port": 65102
             }
         },
         {
             "id": 3,
-            "description": "File consumer 1",
-            "function": "file_consumer",
-            "output_buffer": -1,
-            "input_buffers": [1],
+            "description": "Network client 3",
+            "function": "network_producer",
+            "output_buffer": 3,
+            "input_buffers": [],
             "args": {
-                "data_dir": "/home/suchname/client",
-                "ext": "rt2"
+                "database": "/var/lib/rt2/plan.db",
+                "source": "localhost",
+                "port": 65103
             }
         },
         {
             "id": 4,
             "description": "Data processing",
             "function": "data_processor",
-            "output_buffer": 2,
-            "input_buffers": [0, 1],
+            "output_buffer": 4,
+            "input_buffers": [0, 1, 2, 3],
             "args": {
             }
         },
         {
             "id": 5,
-            "description": "Network server",
-            "function": "network_consumer",
-            "output_buffer": -1,
-            "input_buffers": [1],
+            "description": "1:1000 averager",
+            "function": "data_averager",
+            "output_buffer": 5,
+            "input_buffers": [4],
             "args": {
-                "port": 65103
+                "ratio": 1000
             }
         },
         {
             "id": 6,
-            "description": "1:1000 averager",
-            "function": "data_averager",
-            "output_buffer": 3,
-            "input_buffers": [2],
+            "description": "Network server",
+            "function": "network_consumer",
+            "output_buffer": -1,
+            "input_buffers": [5],
             "args": {
+                "port": 65200
             }
         },
         {
@@ -102,10 +115,30 @@
             "description": "Copies the radar field image",
             "function": "image_archiver",
             "output_buffer": -1,
-            "input_buffers": [0],
+            "input_buffers": [4],
             "args": {
-                "source_image_path": "/var/www/html/telescope_live.png",
-                "output_dir": "/home/suchname/client"
+                "source_image_path": "/var/www/html/img/latestrt2.jpg",
+                "output_dir": "/home/josefm/client"
+            }
+        },
+        {
+            "id": 8,
+            "description": "File consumer processed averaged",
+            "function": "file_consumer",
+            "output_buffer": -1,
+            "input_buffers": [5],
+            "args": {
+                "data_dir": "/home/josefm/client",
+                "ext": "dat",
+                "telescope_id": 128,
+                "machine_id": 0,
+                "nchans": 4096,
+                "nbits": 64,
+                "tsamp": 0.001,
+                "fch1": 1250.0,
+                "foff": -0.244140625,
+                "data_type": 1,
+                "barycentric": 0
             }
         }
     ]
